@@ -39,8 +39,8 @@ namespace MiFare.Devices
      
         private async Task CardDetectionLoop(CancellationToken token)
         {
-
-            await TaskEx.Delay(1, token)
+            //TODO TaskEx
+            await Task.Delay(1, token)
                       .ConfigureAwait(false); // resume on threadpool thread
 
             while (!token.IsCancellationRequested)
@@ -77,7 +77,8 @@ namespace MiFare.Devices
                                 var evt = CardAdded;
                                 if (evt != null)
                                 {
-                                    TaskEx.Run(() => evt(this, new CardAddedEventArgs(card)));
+                                    //TODO TaskEx
+                                    Task.Run(() => evt(this, new CardAddedEventArgs(card)));
                                 }
                             }
                         }
@@ -101,7 +102,8 @@ namespace MiFare.Devices
                         }
                     }
 
-                    await TaskEx.Delay(250, token);
+                    //TODO TaskEx
+                    await Task.Delay(250, token);
                 }
                 catch (Exception ex)
                 {
@@ -119,7 +121,8 @@ namespace MiFare.Devices
                 if (evt != null)
                 {
                     // run on seperate thread to not block loop
-                    TaskEx.Run(() => evt(this, new CardRemovedEventArgs(oldCard)));
+                    //TODO TaskEx
+                    Task.Run(() => evt(this, new CardRemovedEventArgs(oldCard)));
                 }
             }
         }

@@ -22,7 +22,8 @@ namespace MiFare.Classic
         private readonly SmartCard smartCard;
         private SmartCardConnection connection;
         private readonly Task initialization;
-        private static readonly Task<ApduResponse> completed = TaskEx.FromResult<ApduResponse>(new NoResponse());
+        //TODO TaskEx
+        private static readonly Task<ApduResponse> completed = Task.FromResult<ApduResponse>(new NoResponse());
 
         public MiFareWin32CardReader(SmartCard smartCard, ICollection<SectorKeySet> keys) : base(keys)
         {
@@ -39,8 +40,9 @@ namespace MiFare.Classic
         protected override Task<byte[]> GetAnswerToResetAsync()
         {
             var atr = smartCard.AtrBytes;
+            //TODO TaskEx
 
-            return TaskEx.FromResult(atr);
+            return Task.FromResult(atr);
         }
         
         protected override async Task<ApduResponse> TransceiveAsync(ApduCommand apduCommand)

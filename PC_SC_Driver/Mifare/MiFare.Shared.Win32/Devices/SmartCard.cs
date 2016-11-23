@@ -33,7 +33,8 @@ namespace MiFare.Devices
 
             Debug.WriteLine($"SmartCardConnection.Connect: hContext = {hContext}, hCard = {hCard}, protocol = {hProtocol}");
 
-            return TaskEx.FromResult(new SmartCardConnection(hCard, hProtocol));
+            //TODO TaskEx
+            return Task.FromResult(new SmartCardConnection(hCard, hProtocol));
         }
 
 

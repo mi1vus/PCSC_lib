@@ -42,7 +42,8 @@ namespace MiFare
                     readerName = names.First();
                 }
             }
-            return TaskEx.FromResult(new SmartCardReader(readerName));
+            //TODO TaskEx
+            return Task.FromResult(new SmartCardReader(readerName));
         }
         
         public static IList<string> GetReaderNames()

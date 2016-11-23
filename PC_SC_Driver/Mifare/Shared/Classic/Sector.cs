@@ -190,6 +190,20 @@ namespace MiFare.Classic
             }
         }
 
+        /// <summary>
+        ///     restore data from a cache
+        /// </summary>
+        /// <param name="block">index of the datablock</param>
+        /// <returns>data read (always 16 bytes)</returns>
+        /// <remarks>may throw CardLoginException and CardReadException</remarks>
+        public async Task<bool> RestoreData(int block)
+        {
+            var db = await GetDataBlockInt(block);
+            if (db.IsChanged)
+                return db?.RestoreData() ?? false;
+            return false;
+        }
+
         private async Task FlushDataBlock(DataBlock dataBlock)
         {
             if (card.ActiveSector != sector)

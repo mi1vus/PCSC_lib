@@ -45,5 +45,15 @@ namespace MiFare.Classic
         public bool IsTrailer { get; }
 
         public bool IsChanged => (!data.Equals(origData));
+
+        public bool RestoreData()
+        {
+            if (IsChanged)
+            {
+                data = origData;
+                return true;
+            }
+            return false;
+        }
     }
 }

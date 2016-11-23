@@ -39,7 +39,8 @@ namespace MiFare.PcSc
 
             if (!IsFirstConnection)
             {
-                await TaskEx.Delay(500);
+                //TODO TaskEx
+                await Task.Delay(500);
             }
             //await TaskEx.Delay(500);
             var responseBuf = connection.Transceive(apduCommand.GetBuffer());
