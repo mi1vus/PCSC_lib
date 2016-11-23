@@ -147,14 +147,31 @@ namespace MiFare.Classic
 
             var readRes = await TransceiveAsync(new Read(blockNumber));
 
+            //card.Reader
+            if (this.GetType() == typeof(MiFareWin32CardReader)
+                && (this as MiFareWin32CardReader).SmartCard.ReaderName.Contains("FEIG"))
+            {
+                //TODO 
+                Array.Reverse(readRes.ResponseData);
+            }
+
             return Tuple.Create(readRes.Succeeded, readRes.ResponseData);
         }
 
         public async Task<bool> Write(int sector, int datablock, byte[] data)
         {
             var blockNumber = SectorToBlock(sector, datablock);
-            
-            var write = new Write(blockNumber, ref data);
+            byte[] local_data = new byte[data.Length];
+            Array.Copy(data, local_data, data.Length);
+            //card.Reader
+            if (this.GetType() == typeof(MiFareWin32CardReader)
+                && (this as MiFareWin32CardReader).SmartCard.ReaderName.Contains("FEIG"))
+            {
+                //TODO 
+                Array.Reverse(local_data);
+            }
+
+            var write = new Write(blockNumber, ref local_data);
             var adpuRes = await TransceiveAsync(write);
 
             return adpuRes.Succeeded;

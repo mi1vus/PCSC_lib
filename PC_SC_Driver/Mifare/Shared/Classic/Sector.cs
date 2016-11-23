@@ -227,12 +227,12 @@ namespace MiFare.Classic
                 var res = await card.Reader.Read(sector, block);
                 if (!res.Item1)
                     throw new CardReadException($"Unable to read from sector {sector}, block {block}");
-                //card.Reader
-                if (card.Reader.GetType() == typeof(MiFareWin32CardReader)
-                    && (card.Reader as MiFareWin32CardReader).SmartCard.ReaderName.Contains("FEIG"))
-                {
-                    Array.Reverse(res.Item2);
-                }
+                ////card.Reader
+                //if (card.Reader.GetType() == typeof(MiFareWin32CardReader)
+                //    && (card.Reader as MiFareWin32CardReader).SmartCard.ReaderName.Contains("FEIG"))
+                //{
+                //    Array.Reverse(res.Item2);
+                //}
                 db = new DataBlock(block, res.Item2, (block == TrailerBlockIndex));
                 dataBlocks[block] = db;
             }
