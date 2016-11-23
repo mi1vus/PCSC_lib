@@ -17,7 +17,6 @@ using CustomMifareReader;
 
 public static class PC_SC_Drv
 {
-
     private static SmartCardReader _reader = null;
     private static MiFareCard _card = null;
     private static MiFareCard _localCard = null;
