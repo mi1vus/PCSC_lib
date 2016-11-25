@@ -5,8 +5,6 @@ namespace MiFare.Classic
 {
     public static class Extensions
     {
-      
-        
         public static bool IsEqual(this BitArray value, BitArray ba)
         {
             if (value.Length != ba.Length)
