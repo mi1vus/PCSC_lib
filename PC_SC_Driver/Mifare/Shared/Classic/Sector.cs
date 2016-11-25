@@ -161,6 +161,10 @@ namespace MiFare.Classic
         {
             var db = await GetDataBlockInt(block);
 
+            //TODO
+            if (db == null)
+                throw new Exception("dblock null ind:" + block);
+
             return db?.Data;
         }
 
@@ -183,6 +187,13 @@ namespace MiFare.Classic
                 var numBytes = Math.Min(DataBlock.Length, data.Length - bytesWritten);
 
                 var blockData = await GetData(blockIdx);
+
+                //TODO
+                if (data == null)
+                    throw new Exception("data null ind:" + blockIdx);
+                if (blockData == null)
+                    throw new Exception("Data null ind:" + blockIdx);
+
                 Array.Copy(data, bytesWritten, blockData, 0, numBytes);
 
                 bytesWritten += numBytes;
@@ -219,6 +230,7 @@ namespace MiFare.Classic
                 throw new CardWriteException($"Unable to write in sector {sector}, block {dataBlock.Number}");
         }
 
+        private int ActiveBlock = -1;
         private async Task<DataBlock> GetDataBlockInt(int block)
         {
             var db = dataBlocks[block];
@@ -226,7 +238,7 @@ namespace MiFare.Classic
             if (db != null)
                 return db;
 
-            if (card.ActiveSector != sector)
+            if (card.ActiveSector != sector || ActiveBlock != block)
             {
                 if (!await card.Reader.Login(sector, InternalKeyType.KeyA))
                 {
@@ -237,18 +249,13 @@ namespace MiFare.Classic
                     }
                 }
 
-
                 var res = await card.Reader.Read(sector, block);
                 if (!res.Item1)
                     throw new CardReadException($"Unable to read from sector {sector}, block {block}");
-                ////card.Reader
-                //if (card.Reader.GetType() == typeof(MiFareWin32CardReader)
-                //    && (card.Reader as MiFareWin32CardReader).SmartCard.ReaderName.Contains("FEIG"))
-                //{
-                //    Array.Reverse(res.Item2);
-                //}
+
                 db = new DataBlock(block, res.Item2, (block == TrailerBlockIndex));
                 dataBlocks[block] = db;
+                ActiveBlock = block;
             }
 
             return db;

@@ -28,10 +28,11 @@ namespace CustomMifareReaderm
         private static IccDetection _cardIdentification = null;
         private static HashSet<Tuple<int, int>> _cardBadSectors = null;
 
-        private static int? _currentSector = null;
-        private static int? _currentKeyType = null;
+//        private static int? _currentSector = null;
+//        private static int? _currentKeyType = null;
 
         private static IntPtr _obj = IntPtr.Zero;
+//        private static byte[] _nullData = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
         //--------------------------sector,KeyType ---> slot, nonvolatile, key (6 bite)
         private static Dictionary<Tuple<int, int>, Tuple<int, bool, byte[]>> _keys;
@@ -174,8 +175,6 @@ namespace CustomMifareReaderm
             {
                 if (_keys != null && _card != null)
                 {
-                    _currentSector = Sector;
-                    _currentKeyType = KeyType_int;
                     byte[] key = UnMemory<byte>.ReadInMemArr(Key, 6);
                     _keys[new Tuple<int, int>(Sector, KeyType_int)] = new Tuple<int, bool, byte[]>(KeyIndex, NonvolatileMemory, key);
                     _card.AddOrUpdateSectorKeySet(new SectorKeySet()
@@ -333,8 +332,6 @@ namespace CustomMifareReaderm
                 if (secAccess == null)
                     throw new Exception("Неудачная аутентификация!");
 
-                _currentSector = Sector;
-                _currentKeyType = KeyType;
                 return (int) ErrorCodes.E_SUCCESS;
             }
             catch (Exception e)
@@ -358,40 +355,37 @@ namespace CustomMifareReaderm
             WriteToLog(text);
             try
             {
-                if (_card != null && _currentSector != null && _currentKeyType != null)
+                if (_card != null)
                 {
                     int blockInSector;
                     int controlSector;
                     BlockToSectorBlock(Block, out controlSector, out blockInSector);
 
-                    if (controlSector != _currentSector.Value)
-                        throw new Exception("Блок не соответствует текущему сектору");
-
-                    var keyA = GetKeyFromCollection(_currentSector.Value, 0);
-                    var keyB = GetKeyFromCollection(_currentSector.Value, 1);
+                    var keyA = GetKeyFromCollection(controlSector, 0);
+                    var keyB = GetKeyFromCollection(controlSector, 1);
 
                     text =
-                        $"!!! ReadBlock before !!!\tcurrentSector: {_currentSector.Value}\tblockInSector: {blockInSector}\t_currentKeyType: {_currentKeyType.Value}\tkeyA: {BitConverter.ToString(keyA ?? new byte[] { })}\tkeyB: {BitConverter.ToString(keyB ?? new byte[] { })}";
+                        $"!!! ReadBlock before !!!\tcurrentSector: {controlSector}\tblockInSector: {blockInSector}\tkeyA: {BitConverter.ToString(keyA ?? new byte[] { })}\tkeyB: {BitConverter.ToString(keyB ?? new byte[] { })}";
                     WriteToLog(text);
 
                     //TODO удалить
-                    if (_cardBadSectors?.Contains(new Tuple<int, int>(_currentSector.Value, blockInSector))??false)
+                    if (_cardBadSectors?.Contains(new Tuple<int, int>(controlSector, blockInSector))??false)
                     {
-                        byte[] dataBadSectors = ReadFromFileSector(_currentSector.Value, blockInSector);
+                        byte[] dataBadSectors = ReadFromFileSector(controlSector, blockInSector);
 
                         if (dataBadSectors.Length > 0 && dataBadSectors.Length < 17)
                         {
-                            WriteToLog($"SaveInMemory {dataBadSectors.Length} byte");
+                            WriteToLog($"SaveInMemory from file {dataBadSectors.Length} byte");
                             UnMemory<byte>.SaveInMemArr(dataBadSectors, ref Buffer);
                         }
 
                         //TODO убрать логи чтения и записи
-                        //WriteToLog($"Sector '{_currentSector.Value}':[{blockInSector}]{dataBadSectors.ByteArrayToString()}");
-                        WriteDataToLog(_currentSector.Value, blockInSector, dataBadSectors.ByteArrayToString());
+                        //WriteToLog($"Sector '{controlSector}':[{blockInSector}]{dataBadSectors.ByteArrayToString()}");
+                        WriteDataToLog(controlSector, blockInSector, dataBadSectors.ByteArrayToString(), false);
                         return (int) ErrorCodes.E_SUCCESS;
                     }
 
-                    byte[] data = GetData(_currentSector.Value, blockInSector, keyA, keyB).Result;
+                    byte[] data = GetData(controlSector, blockInSector, keyA, keyB).Result;
                     if (data.Length > 0 && data.Length < 17)
                     {
                         WriteToLog($"SaveInMemory {data.Length} byte");
@@ -399,8 +393,8 @@ namespace CustomMifareReaderm
                     }
 
                     //TODO убрать логи чтения и записи
-                    //WriteToLog($"Sector '{_currentSector.Value}':[{blockInSector}]{data.ByteArrayToString()}");
-                    WriteDataToLog(_currentSector.Value, blockInSector, data.ByteArrayToString());
+                    //WriteToLog($"Sector '{controlSector}':[{blockInSector}]{data.ByteArrayToString()}");
+                    WriteDataToLog(controlSector, blockInSector, data.ByteArrayToString(), false);
 
                     return (int) ErrorCodes.E_SUCCESS;
                 }
@@ -428,7 +422,7 @@ namespace CustomMifareReaderm
 
                     var sec = _card.GetSector(sector);
                     result = await sec.GetData(blockInSector);
-                    //data = _localCard.GetData(_currentSector.Value, blockInSector, 16).Result;
+                    //data = _localCard.GetData(controlSector, blockInSector, 16).Result;
                 }
                 else //TODO Убрать!
                 {
@@ -454,7 +448,7 @@ namespace CustomMifareReaderm
                             Sector = 1,
                             Key = key2
                         });
-                        //localCard.AddOrUpdateSectorKeySet(new SectorKeySet() { KeyType = KeyType.KeyB, Sector = 1, Key = key2 });
+                        //_card.AddOrUpdateSectorKeySet(new SectorKeySet() { KeyType = KeyType.KeyB, Sector = 1, Key = key2 });
                         result = await _card.GetData(sector, blockInSector, 16);
                     }
                 }
@@ -479,7 +473,7 @@ namespace CustomMifareReaderm
             WriteToLog(text);
             try
             {
-                if (_card != null && _currentSector != null && _currentKeyType != null)
+                if (_card != null)
                 {
                     int blockInSector;
                     int controlSector;
@@ -487,24 +481,25 @@ namespace CustomMifareReaderm
 
                     byte[] data = UnMemory<byte>.ReadInMemArr(Data, 16);
 
-                    var keyA = GetKeyFromCollection(_currentSector.Value, 0);
-                    var keyB = GetKeyFromCollection(_currentSector.Value, 1);
+                    var keyA = GetKeyFromCollection(controlSector, 0);
+                    var keyB = GetKeyFromCollection(controlSector, 1);
 
                     text =
-                        $"!!! WriteBlock internal !!!\tcurrentSector: {_currentSector.Value}\tblockInSector: {blockInSector}\t_currentKeyType: {_currentKeyType.Value}\tkeyA: {BitConverter.ToString(keyA ?? new byte[] { })}\tkeyB: {BitConverter.ToString(keyB ?? new byte[] { })}\tData:{BitConverter.ToString(data ?? new byte[] { })}\t";
+                        $"!!! WriteBlock internal !!!\tcurrentSector: {controlSector}\tblockInSector: {blockInSector}\tkeyA: {BitConverter.ToString(keyA ?? new byte[] { })}\tkeyB: {BitConverter.ToString(keyB ?? new byte[] { })}\tData:{BitConverter.ToString(data ?? new byte[] { })}\t";
                     WriteToLog(text);
 
-                    if (controlSector != _currentSector.Value)
-                        throw new Exception("Блок не соответствует текущему сектору");
-
                     //TODO убрать
-                    if (_cardBadSectors?.Contains(new Tuple<int, int>(_currentSector.Value, blockInSector)) ?? false)
+                    if (_cardBadSectors?.Contains(new Tuple<int, int>(controlSector, blockInSector)) ?? false)
                     {
-                        WriteOrReplaceToFileSector(_currentSector.Value, blockInSector, data);
+                        WriteOrReplaceToFileSector(controlSector, blockInSector, data);
+                        text = "!!! WriteBlock to file!";
+                        WriteToLog(text);
                         return (int)ErrorCodes.E_SUCCESS;
                     }
 
-                    var result = SetData(data, _currentSector.Value, blockInSector, keyA, keyB).Result;
+                    WriteDataToLog(controlSector, blockInSector, data.ByteArrayToString(), true);
+
+                    var result = SetData(data, controlSector, blockInSector, keyA, keyB).Result;
 
                     if (result == (int) ErrorCodes.E_SUCCESS)
                         result = Transfer(Obj, Block);
@@ -524,7 +519,7 @@ namespace CustomMifareReaderm
         private static async Task<int> SetData(byte[] data, int sector, int blockInSector, byte[] keyA, byte[] keyB)
         {
             if (data == null)
-                throw new Exception("data null");
+                throw new Exception("!!!! SetData ERROR !!! data null");
             //if (keyA == null)
             //    throw new Exception("keyA null");
             //if (keyB == null)
@@ -556,7 +551,7 @@ namespace CustomMifareReaderm
                     else
                         await sec.SetData(data, blockInSector);
 
-                    //data = _localCard.GetData(_currentSector.Value, blockInSector, 16).Result;
+                    //data = _localCard.GetData(controlSector, blockInSector, 16).Result;
 
                 return (int) ErrorCodes.E_SUCCESS;
             }
@@ -579,44 +574,41 @@ namespace CustomMifareReaderm
             WriteToLog(text);
             try
             {
-                if (_card != null && _currentSector != null && _currentKeyType != null)
+                if (_card != null)
                 {
                     int blockInSector;
                     int controlSector;
                     BlockToSectorBlock(Block, out controlSector, out blockInSector);
 
-                    if (controlSector != _currentSector.Value)
-                        throw new Exception("Блок не соответствует текущему сектору");
-
-                    var keyA = GetKeyFromCollection(_currentSector.Value, 0);
-                    var keyB = GetKeyFromCollection(_currentSector.Value, 1);
+                    var keyA = GetKeyFromCollection(controlSector, 0);
+                    var keyB = GetKeyFromCollection(controlSector, 1);
 
                     text =
-                        $"!!! Decrement before !!!\tcurrentSector: {_currentSector.Value}\tblockInSector: {blockInSector}\t_currentKeyType: {_currentKeyType.Value}\tkeyA: {BitConverter.ToString(keyA ?? new byte[] { })}\tkeyB: {BitConverter.ToString(keyB ?? new byte[] { })}";
+                        $"!!! Decrement before !!!\tcurrentSector: {controlSector}\tblockInSector: {blockInSector}\tkeyA: {BitConverter.ToString(keyA ?? new byte[] { })}\tkeyB: {BitConverter.ToString(keyB ?? new byte[] { })}";
                     WriteToLog(text);
 
-                    if (_cardBadSectors?.Contains(new Tuple<int, int>(_currentSector.Value, blockInSector)) ?? false)
+                    if (_cardBadSectors?.Contains(new Tuple<int, int>(controlSector, blockInSector)) ?? false)
                     {
-                        byte[] dataBadSectors = ReadFromFileSector(_currentSector.Value, blockInSector);
+                        byte[] dataBadSectors = ReadFromFileSector(controlSector, blockInSector);
                         IncDecByteArray(ref dataBadSectors, -Value);
-                        var resultBadSec = SetData(dataBadSectors, _currentSector.Value, blockInSector, keyA, keyB).Result;
+                        var resultBadSec = SetData(dataBadSectors, controlSector, blockInSector, keyA, keyB).Result;
                         //TODO убрать логи чтения и записи
-                        WriteToLog($"Decremented sector '{_currentSector.Value}':[{blockInSector}]{dataBadSectors.ByteArrayToString()}");
-                        WriteDataToLog(_currentSector.Value, blockInSector, dataBadSectors.ByteArrayToString());
+                        WriteToLog($"Decremented sector in file '{controlSector}':[{blockInSector}]{dataBadSectors.ByteArrayToString()}");
+                        WriteDataToLog(controlSector, blockInSector, dataBadSectors.ByteArrayToString(), true);
 
                         return resultBadSec;
                     }
 
-                    byte[] data = GetData(_currentSector.Value, blockInSector, keyA, keyB).Result;
+                    byte[] data = GetData(controlSector, blockInSector, keyA, keyB).Result;
                     IncDecByteArray(ref data, -Value);
-                    var result = SetData(data, _currentSector.Value, blockInSector, keyA, keyB).Result;
+                    var result = SetData(data, controlSector, blockInSector, keyA, keyB).Result;
 
                     if (result == (int)ErrorCodes.E_SUCCESS)
                         result = Transfer(Obj, Block);
 
                     //TODO убрать логи чтения и записи
-                    WriteToLog($"Decremented sector '{_currentSector.Value}':[{blockInSector}]{data.ByteArrayToString()}");
-                    WriteDataToLog(_currentSector.Value, blockInSector, data.ByteArrayToString());
+                    WriteToLog($"Decremented sector '{controlSector}':[{blockInSector}]{data.ByteArrayToString()}");
+                    WriteDataToLog(controlSector, blockInSector, data.ByteArrayToString(), true);
 
                     return result;
                 }
@@ -642,44 +634,44 @@ namespace CustomMifareReaderm
             WriteToLog(text);
             try
             {
-                if (_card != null && _currentSector != null && _currentKeyType != null)
+                if (_card != null)
                 {
                     int blockInSector;
                     int controlSector;
                     BlockToSectorBlock(Block, out controlSector, out blockInSector);
 
-                    if (controlSector != _currentSector.Value)
+                    if (controlSector != controlSector)
                         throw new Exception("Блок не соответствует текущему сектору");
 
-                    var keyA = GetKeyFromCollection(_currentSector.Value, 0);
-                    var keyB = GetKeyFromCollection(_currentSector.Value, 1);
+                    var keyA = GetKeyFromCollection(controlSector, 0);
+                    var keyB = GetKeyFromCollection(controlSector, 1);
 
                     text =
-                        $"!!! Increment before !!!\tcurrentSector: {_currentSector.Value}\tblockInSector: {blockInSector}\t_currentKeyType: {_currentKeyType.Value}\tkeyA: {BitConverter.ToString(keyA ?? new byte[] { })}\tkeyB: {BitConverter.ToString(keyB ?? new byte[] { })}";
+                        $"!!! Increment before !!!\tcurrentSector: {controlSector}\tblockInSector: {blockInSector}\tkeyA: {BitConverter.ToString(keyA ?? new byte[] { })}\tkeyB: {BitConverter.ToString(keyB ?? new byte[] { })}";
                     WriteToLog(text);
 
-                    if (_cardBadSectors?.Contains(new Tuple<int, int>(_currentSector.Value, blockInSector)) ?? false)
+                    if (_cardBadSectors?.Contains(new Tuple<int, int>(controlSector, blockInSector)) ?? false)
                     {
-                        byte[] dataBadSectors = ReadFromFileSector(_currentSector.Value, blockInSector);
+                        byte[] dataBadSectors = ReadFromFileSector(controlSector, blockInSector);
                         IncDecByteArray(ref dataBadSectors, Value);
-                        var resultBadSec = SetData(dataBadSectors, _currentSector.Value, blockInSector, keyA, keyB).Result;
+                        var resultBadSec = SetData(dataBadSectors, controlSector, blockInSector, keyA, keyB).Result;
                         //TODO убрать логи чтения и записи
-                        WriteToLog($"Decremented sector '{_currentSector.Value}':[{blockInSector}]{dataBadSectors.ByteArrayToString()}");
-                        WriteDataToLog(_currentSector.Value, blockInSector, dataBadSectors.ByteArrayToString());
+                        WriteToLog($"Incremented sector in file '{controlSector}':[{blockInSector}]{dataBadSectors.ByteArrayToString()}");
+                        WriteDataToLog(controlSector, blockInSector, dataBadSectors.ByteArrayToString(), true);
 
                         return resultBadSec;
                     }
 
-                    byte[] data = GetData(_currentSector.Value, blockInSector, keyA, keyB).Result;
+                    byte[] data = GetData(controlSector, blockInSector, keyA, keyB).Result;
                     IncDecByteArray(ref data, Value);
-                    var result = SetData(data, _currentSector.Value, blockInSector, keyA, keyB).Result;
+                    var result = SetData(data, controlSector, blockInSector, keyA, keyB).Result;
 
                     if (result == (int)ErrorCodes.E_SUCCESS)
                         result = Transfer(Obj, Block);
 
                     //TODO убрать логи чтения и записи
-                    WriteToLog($"Incremented sector '{_currentSector.Value}':[{blockInSector}]{data.ByteArrayToString()}");
-                    WriteDataToLog(_currentSector.Value, blockInSector, data.ByteArrayToString());
+                    WriteToLog($"Incremented sector '{controlSector}':[{blockInSector}]{data.ByteArrayToString()}");
+                    WriteDataToLog(controlSector, blockInSector, data.ByteArrayToString(), true);
 
                     return result;
                 }
@@ -702,29 +694,29 @@ namespace CustomMifareReaderm
             WriteToLog(text);
             try
             {
-                if (_card != null && _currentSector != null && _currentKeyType != null)
+                if (_card != null)
                 {
                     int blockInSector;
                     int controlSector;
                     BlockToSectorBlock(Block, out controlSector, out blockInSector);
 
-                    if (controlSector != _currentSector.Value)
+                    if (controlSector != controlSector)
                         throw new Exception("Блок не соответствует текущему сектору");
 
-                    var keyA = GetKeyFromCollection(_currentSector.Value, 0);
-                    var keyB = GetKeyFromCollection(_currentSector.Value, 1);
+                    var keyA = GetKeyFromCollection(controlSector, 0);
+                    var keyB = GetKeyFromCollection(controlSector, 1);
 
                     text =
-                        $"!!! Restore before !!!\tcurrentSector: {_currentSector.Value}\tblockInSector: {blockInSector}\t_currentKeyType: {_currentKeyType.Value}\tkeyA: {BitConverter.ToString(keyA ?? new byte[] { })}\tkeyB: {BitConverter.ToString(keyB ?? new byte[] { })}";
+                        $"!!! Restore before !!!\tcurrentSector: {controlSector}\tblockInSector: {blockInSector}\tkeyA: {BitConverter.ToString(keyA ?? new byte[] { })}\tkeyB: {BitConverter.ToString(keyB ?? new byte[] { })}";
                     WriteToLog(text);
 
-                    _card.AddOrUpdateSectorKeySet(new SectorKeySet() { KeyType = KeyType.KeyA, Sector = _currentSector.Value, Key = keyA });
-                    _card.AddOrUpdateSectorKeySet(new SectorKeySet() { KeyType = KeyType.KeyB, Sector = _currentSector.Value, Key = keyB });
+                    _card.AddOrUpdateSectorKeySet(new SectorKeySet() { KeyType = KeyType.KeyA, Sector = controlSector, Key = keyA });
+                    _card.AddOrUpdateSectorKeySet(new SectorKeySet() { KeyType = KeyType.KeyB, Sector = controlSector, Key = keyB });
 
-                    var sec = _card.GetSector(_currentSector.Value);
+                    var sec = _card.GetSector(controlSector);
 
                     //TODO только для тестов!
-                    if (_cardBadSectors?.Contains(new Tuple<int, int>(_currentSector.Value, blockInSector))??false)
+                    if (_cardBadSectors?.Contains(new Tuple<int, int>(controlSector, blockInSector))??false)
                         return (int)ErrorCodes.E_SUCCESS;
 
                     var result = sec.RestoreData(blockInSector).Result ? 
@@ -753,26 +745,26 @@ namespace CustomMifareReaderm
             WriteToLog(text);
             try
             {
-                if (_card != null && _currentSector != null && _currentKeyType != null)
+                if (_card != null)
                 {
                     int blockInSector;
                     int controlSector;
                     BlockToSectorBlock(Block, out controlSector, out blockInSector);
 
-                    if (controlSector != _currentSector.Value)
+                    if (controlSector != controlSector)
                         throw new Exception("Блок не соответствует текущему сектору");
 
-                    var keyA = GetKeyFromCollection(_currentSector.Value, 0);
-                    var keyB = GetKeyFromCollection(_currentSector.Value, 1);
+                    var keyA = GetKeyFromCollection(controlSector, 0);
+                    var keyB = GetKeyFromCollection(controlSector, 1);
                     text =
-                        $"!!! Transfer before !!!\tcurrentSector: {_currentSector.Value}\tblockInSector: {blockInSector}\t_currentKeyType: {_currentKeyType.Value}\tkeyA: {BitConverter.ToString(keyA ?? new byte[] { })}\tkeyB: {BitConverter.ToString(keyB ?? new byte[] { })}";
+                        $"!!! Transfer before !!!\tcurrentSector: {controlSector}\tblockInSector: {blockInSector}\tkeyA: {BitConverter.ToString(keyA ?? new byte[] { })}\tkeyB: {BitConverter.ToString(keyB ?? new byte[] { })}";
                     WriteToLog(text);
 
                     //TODO только для тестов!
-                    if (_cardBadSectors?.Contains(new Tuple<int, int>(_currentSector.Value, blockInSector)) ?? false)
+                    if (_cardBadSectors?.Contains(new Tuple<int, int>(controlSector, blockInSector)) ?? false)
                         return (int)ErrorCodes.E_SUCCESS;
 
-                    return FlushData(_currentSector.Value, blockInSector, _currentKeyType.Value, keyA, keyB).Result;
+                    return FlushData(controlSector, blockInSector, keyA, keyB).Result;
                 }
                 //return (int)ErrorCodes.E_CARDREADER_NOT_INIT;
                 return (int)ErrorCodes.E_SUCCESS;//TODO удалить
@@ -785,23 +777,23 @@ namespace CustomMifareReaderm
                 return (int)ErrorCodes.E_SUCCESS;//TODO удалить
             }
         }
-        private static async Task<int> FlushData(int sector, int blockInSector, int keyType, byte[] keyA, byte[] keyB)
+        private static async Task<int> FlushData(int sector, int blockInSector, byte[] keyA, byte[] keyB)
         {
             try
             {
                 if (keyA != null)
-                    _card.AddOrUpdateSectorKeySet(new SectorKeySet() { KeyType = KeyType.KeyA, Sector = _currentSector.Value, Key = keyA });
+                    _card.AddOrUpdateSectorKeySet(new SectorKeySet() { KeyType = KeyType.KeyA, Sector = sector, Key = keyA });
                 if (keyB != null)
-                    _card.AddOrUpdateSectorKeySet(new SectorKeySet() { KeyType = KeyType.KeyB, Sector = _currentSector.Value, Key = keyB });
+                    _card.AddOrUpdateSectorKeySet(new SectorKeySet() { KeyType = KeyType.KeyB, Sector = sector, Key = keyB });
 
                 var sec = _card.GetSector(sector);
                 await sec.Flush();
                 if (blockInSector == sec.NumDataBlocks - 1)
                 {
                     if (keyA != null)
-                        _card.AddOrUpdateSectorKeySet(new SectorKeySet() { KeyType = KeyType.KeyA, Sector = _currentSector.Value, Key = keyA });
+                        _card.AddOrUpdateSectorKeySet(new SectorKeySet() { KeyType = KeyType.KeyA, Sector = sector, Key = keyA });
                     if (keyB != null)
-                        _card.AddOrUpdateSectorKeySet(new SectorKeySet() { KeyType = KeyType.KeyB, Sector = _currentSector.Value, Key = keyB });
+                        _card.AddOrUpdateSectorKeySet(new SectorKeySet() { KeyType = KeyType.KeyB, Sector = sector, Key = keyB });
 
                     if (keyA != null && keyB != null)
                         await sec.FlushTrailer(keyA?.ByteArrayToString(), keyB?.ByteArrayToString());
@@ -871,7 +863,7 @@ namespace CustomMifareReaderm
         }
 
         private static int write_data_count = 0;
-        private static void WriteDataToLog(int sector, int block, string data, bool showMsg = false)
+        private static void WriteDataToLog(int sector, int block, string data, bool write)
         {
             //bool logIsError = text.Contains("ERROR!!!");
             //bool writeToLog = logIsError;
@@ -889,14 +881,14 @@ namespace CustomMifareReaderm
                 // Create a file to write to.
                 using (StreamWriter sw = File.CreateText(path))
                 {
-                    sw.Write($"sector: {sector} [{block}]\t{DateTime.Now.ToString()}: {data}\r\n");
+                    sw.Write($"{(write ? "write" : " read")}: {sector} [{block}]\t{DateTime.Now.ToString()}: {data}\r\n");
                 }
             }
             else
             {
                 using (StreamWriter sw = File.AppendText(path))
                 {
-                    sw.Write($"sector: {sector} [{block}]\t{DateTime.Now.ToString()}: {data}\r\n");
+                    sw.Write($"{(write ? "write" : " read")}: {sector} [{block}]\t{DateTime.Now.ToString()}: {data}\r\n");
                 }
             }
 //        if (showMsg)
@@ -931,13 +923,13 @@ namespace CustomMifareReaderm
             var ind = fileList.FindIndex(s => s.Contains($"{sector},{block}:"));
             if (ind >= 0)
             {
-                fileList[ind] = $"{sector},{block}:{data.ByteArrayToString()}";
+                fileList[ind] = $"{sector},{block}:{data?.ByteArrayToString()}";
                 File.WriteAllLines(path, fileList);
             }
             else
                 using (StreamWriter sw = File.AppendText(path))
                 {
-                    sw.Write($"{sector},{block}:{data.ByteArrayToString()}{Environment.NewLine}");
+                    sw.Write($"{sector},{block}:{data?.ByteArrayToString()}{Environment.NewLine}");
                 }
             //        if (showMsg)
             //MessageBox.Show(data);
@@ -1007,22 +999,22 @@ namespace CustomMifareReaderm
                 using (var file = new StreamReader(path))
                 {
                     var header = file.ReadLine();
-                    if (string.IsNullOrWhiteSpace(header))
+                    if (!string.IsNullOrWhiteSpace(header))
                     {
                         var bads = header.Split(';');
                         foreach (var bad in bads)
                         {
-                            bad.Split(',');
-                            if (bad.Length == 2)
+                            var pair = bad.Split(',');
+                            if (pair.Length == 2)
                                 result.Add(
                                     new Tuple<int, int>(
-                                        Convert.ToInt32(bad[0]),
-                                        Convert.ToInt32(bad[1])));
+                                        Convert.ToInt32(pair[0]),
+                                        Convert.ToInt32(pair[1])));
                         }
                     }
                 }
             }
-//        if (showMsg)
+            //        if (showMsg)
             //MessageBox.Show(data);
 
             return result;
@@ -1077,7 +1069,6 @@ namespace CustomMifareReaderm
                 _card?.Dispose();
                 _card = null;
                 _cardBadSectors?.Clear();
-                _currentSector = null;
                 _keys?.Clear();
 
             }
@@ -1096,7 +1087,6 @@ namespace CustomMifareReaderm
                 _card?.Dispose();
                 _card = ev.SmartCard.CreateMiFareCard();
                 _cardBadSectors = ReadBadsFromFileSector();
-                _currentSector = null;
             }
             catch (Exception e)
             {
@@ -1115,12 +1105,16 @@ namespace CustomMifareReaderm
                 _cardIdentification = await _card.GetCardInfo();
                 WriteToLog("Connected to card\r\nPC/SC device class: " + _cardIdentification.PcscDeviceClass.ToString() +
                            "\r\nCard name: " + _cardIdentification.PcscCardName.ToString());
+                ReadCardData();
             }
             catch (Exception e)
             {
                 WriteToLog("InitCard ERROR!!!\r\n" + e.Message);
                 throw e;
             }
+        }
+        private static async void ReadCardData()
+        {
         }
 
         private static void BlockToSectorBlock(int block, out int sector, out int blockInSector)
