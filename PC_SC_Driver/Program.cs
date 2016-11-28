@@ -26,7 +26,7 @@ namespace CustomMifareReaderm
 
         private static IntPtr _obj = IntPtr.Zero;
 
-        private static bool isInfoNoCardShow = false;
+        private static bool _isInfoNoCardShow = false;
         //--------------------------sector,KeyType ---> slot, nonvolatile, key (6 bite)
         private static Dictionary<Tuple<int, int>, Tuple<int, bool, byte[]>> _keys;
 
@@ -991,7 +991,7 @@ namespace CustomMifareReaderm
                 _card = null;
                 _cardBadSectors?.Clear();
                 _keys?.Clear();
-                isInfoNoCardShow = false;
+                _isInfoNoCardShow = false;
             }
             catch (Exception e)
             {
@@ -1008,7 +1008,7 @@ namespace CustomMifareReaderm
                 _card?.Dispose();
                 _card = ev.SmartCard.CreateMiFareCard();
                 _cardBadSectors = ReadBadsFromFileSector();
-                isInfoNoCardShow = false;
+                _isInfoNoCardShow = false;
             }
             catch (Exception e)
             {
@@ -1024,11 +1024,11 @@ namespace CustomMifareReaderm
             {
                 if (_card == null)
                 {
-                    if (isInfoNoCardShow)
+                    if (_isInfoNoCardShow)
                         return;
 
                     MessageBox.Show("No card!");
-                    isInfoNoCardShow = true;
+                    _isInfoNoCardShow = true;
 
                     return;
                 }
