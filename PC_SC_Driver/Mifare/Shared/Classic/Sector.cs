@@ -161,10 +161,6 @@ namespace MiFare.Classic
         {
             var db = await GetDataBlockInt(block);
 
-            //TODO
-            if (db == null)
-                throw new Exception("dblock null ind:" + block);
-
             return db?.Data;
         }
 
@@ -187,12 +183,6 @@ namespace MiFare.Classic
                 var numBytes = Math.Min(DataBlock.Length, data.Length - bytesWritten);
 
                 var blockData = await GetData(blockIdx);
-
-                //TODO
-                if (data == null)
-                    throw new Exception("data null ind:" + blockIdx);
-                if (blockData == null)
-                    throw new Exception("Data null ind:" + blockIdx);
 
                 Array.Copy(data, bytesWritten, blockData, 0, numBytes);
 
@@ -220,8 +210,18 @@ namespace MiFare.Classic
             if (card.ActiveSector != sector)
             {
                 var writeKey = GetWriteKey(dataBlock.Number);
-                if (!await card.Reader.Login(sector, writeKey))
-                    throw new CardLoginException($"Unable to login in sector {sector} with key {writeKey}");
+
+                if (writeKey == InternalKeyType.KeyAOrB)
+                {
+                    if (!await card.Reader.Login(sector, InternalKeyType.KeyA))
+                        if (!await card.Reader.Login(sector, InternalKeyType.KeyB))
+                            throw new CardLoginException($"Unable to login in sector {sector} with key A or B");
+                }
+                else
+                {
+                    if (!await card.Reader.Login(sector, writeKey))
+                        throw new CardLoginException($"Unable to login in sector {sector} with key {writeKey}");
+                }
 
                 card.ActiveSector = sector;
             }
@@ -279,7 +279,12 @@ namespace MiFare.Classic
             if (datablock == TrailerBlockIndex)
                 return GetTrailerWriteKey();
 
-            return (originalAccessConditions.DataAreas[Math.Min(datablock, Access.DataAreas.Length - 1)].Write == DataAreaAccessCondition.ConditionEnum.KeyA) ? InternalKeyType.KeyA : InternalKeyType.KeyB;
+            var writeAccess = originalAccessConditions.DataAreas[Math.Min(datablock, Access.DataAreas.Length - 1)].Write;
+
+            if (writeAccess == DataAreaAccessCondition.ConditionEnum.KeyAOrB)
+                return InternalKeyType.KeyAOrB;
+
+            return (writeAccess == DataAreaAccessCondition.ConditionEnum.KeyA) ? InternalKeyType.KeyA : InternalKeyType.KeyB;
         }
     }
 }

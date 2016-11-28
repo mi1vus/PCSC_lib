@@ -24,10 +24,11 @@ namespace CustomMifareReader
             comboBox1.SelectedIndex = comboBox1.Items.IndexOf(readers.FirstOrDefault(t => t.Contains("CL")) ?? readers.FirstOrDefault(t => t.Contains("PICC")));
 
             //TODO !!!!!!!!!!!!!!!!!!!!!!!!!!!
-            button1.PerformClick();
+            //button_select.PerformClick();
+            //button_select_Click(null,null);
         }
 
-        private void button1_Click(object sender, EventArgs e)
+        private void button_select_Click(object sender, EventArgs e)
         {
             CurrentReader = comboBox1.SelectedItem.ToString();
         }

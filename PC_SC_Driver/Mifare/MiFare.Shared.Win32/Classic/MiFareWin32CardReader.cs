@@ -41,7 +41,6 @@ namespace MiFare.Classic
         {
             var atr = smartCard.AtrBytes;
             //TODO TaskEx
-
             return Task.FromResult(atr);
         }
         
