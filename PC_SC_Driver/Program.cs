@@ -1077,11 +1077,9 @@ namespace CustomMifareReaderm
         private static byte[] GetKeyFromCollection(int sector, int keyType)
         {
             Tuple<int, bool, byte[]> currentKey;
-            byte[] key;
             if (_keys.TryGetValue(new Tuple<int, int>(sector, keyType), out currentKey))
             {
-                key = currentKey.Item3;
-                return key;
+                return currentKey.Item3;
             }
 
             return null;
