@@ -831,15 +831,6 @@ namespace CustomMifareReaderm
 
         private static void WriteOrReplaceToFileSector(int sector, int block, byte[] data)
         {
-            //bool logIsError = text.Contains("ERROR!!!");
-            //bool writeToLog = logIsError;
-            //#if DEBUG
-            //        writeToLog = true;
-            //#endif
-
-            //if (!writeToLog)
-            //    return;
-
             var uid = _card?.GetUid().Result;
             if (uid == null)
                 throw new Exception("Попытка записи данных в неинициализированную карты");
@@ -861,15 +852,6 @@ namespace CustomMifareReaderm
         }
         private static byte[] ReadFromFileSector(int sector, int block)
         {
-            //bool logIsError = text.Contains("ERROR!!!");
-            //bool writeToLog = logIsError;
-            //#if DEBUG
-            //        writeToLog = true;
-            //#endif
-
-            //if (!writeToLog)
-            //    return;
-
             var uid = _card?.GetUid().Result;
             if (uid == null)
                 throw new Exception("Попытка чтения данных с неинициализированной карты");
@@ -897,15 +879,6 @@ namespace CustomMifareReaderm
         }
         private static HashSet<Tuple<int, int>> ReadBadsFromFileSector()
         {
-            //bool logIsError = text.Contains("ERROR!!!");
-            //bool writeToLog = logIsError;
-            //#if DEBUG
-            //        writeToLog = true;
-            //#endif
-
-            //if (!writeToLog)
-            //    return;
-
             var uid = _card?.GetUid().Result;
             if (uid == null)
                 throw new Exception("Попытка чтения данных с неинициализированной карты");
