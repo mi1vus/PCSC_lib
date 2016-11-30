@@ -779,9 +779,8 @@ namespace CustomMifareReaderm
 
             if (!writeToLog)
                 return;
-
-            string path = @"C:\MifareServio\Out\DLL_Log.txt";
-            if (write_count == 0 || !File.Exists(path))
+            string path = @"Out\DLL_Log.txt";
+            if (/*write_count == 0 ||*/ !File.Exists(path))
             {
                 using (StreamWriter sw = File.CreateText(path))
                 {
@@ -796,6 +795,8 @@ namespace CustomMifareReaderm
                 }
             }
             ++write_count;
+            if (write_count == int.MaxValue)
+                write_count = 0;
         }
 
         private static int write_data_count = 0;
@@ -808,9 +809,8 @@ namespace CustomMifareReaderm
 
             if (!writeToLog)
                 return;
-
-            string path = @"C:\MifareServio\Out\DLL_Data_Log.txt";
-            if (write_data_count == 0 || !File.Exists(path))
+            string path = @"Out\DLL_Data_Log.txt";
+            if (/*write_data_count == 0 ||*/ !File.Exists(path))
             {
                 using (StreamWriter sw = File.CreateText(path))
                 {
@@ -825,6 +825,8 @@ namespace CustomMifareReaderm
                 }
             }
             ++write_data_count;
+            if (write_data_count == int.MaxValue)
+                write_data_count = 0;
         }
 
         private static void WriteOrReplaceToFileSector(int sector, int block, byte[] data)
@@ -842,13 +844,8 @@ namespace CustomMifareReaderm
             if (uid == null)
                 throw new Exception("Попытка записи данных в неинициализированную карты");
 
-            string path = @"C:\MifareServio\Out\file_sector_" + uid.ByteArrayToString() + ".dat";
-            if (!File.Exists(path))
-            {
-                using (var f = File.CreateText(path))
-                {
-                }
-            }
+            string path = @"Out\file_sector_" + uid.ByteArrayToString() + ".dat";
+
             var fileList = File.ReadAllLines(path).ToList();
             var ind = fileList.FindIndex(s => s.Contains($"{sector},{block}:"));
             if (ind >= 0)
@@ -877,7 +874,7 @@ namespace CustomMifareReaderm
             if (uid == null)
                 throw new Exception("Попытка чтения данных с неинициализированной карты");
 
-            string path = @"C:\MifareServio\Out\file_sector_" + uid.ByteArrayToString() + ".dat";
+            string path = @"Out\file_sector_" + uid.ByteArrayToString() + ".dat";
             var sectors = new Dictionary<Tuple<int, int>, byte[]>();
             if (File.Exists(path))
             {
@@ -913,7 +910,7 @@ namespace CustomMifareReaderm
             if (uid == null)
                 throw new Exception("Попытка чтения данных с неинициализированной карты");
 
-            string path = @"C:\MifareServio\Out\file_sector_" + uid.ByteArrayToString() + ".dat";
+            string path = @"Out\file_sector_" + uid.ByteArrayToString() + ".dat";
 
             var result = new HashSet<Tuple<int, int>>();
 
