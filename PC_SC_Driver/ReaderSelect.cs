@@ -2,7 +2,9 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
+using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Windows.Forms;
 
@@ -15,6 +17,8 @@ namespace CustomMifareReader
         public ReaderSelect()
         {
             InitializeComponent();
+            label2.Text = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+                //AppDomain.CurrentDomain.BaseDirectory;//Directory.GetCurrentDirectory();
         }
 
         public void Init(string[] readers)

@@ -2,8 +2,10 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Numerics;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using CoverConstants;
 using CustomMifareReader;
@@ -12,21 +14,18 @@ using MiFare;
 using MiFare.Classic;
 using MiFare.Devices;
 using MiFare.PcSc;
-using System.Numerics;
-using System.Windows.Forms;
 
 namespace CustomMifareReaderm
 {
     public static class PcScDrv
     {
-        private static SmartCardReader _reader = null;
-        private static MiFareCard _card = null;
-        private static IccDetection _cardIdentification = null;
-        private static HashSet<Tuple<int, int>> _cardBadSectors = null;
+        private static SmartCardReader _reader;
+        private static MiFareCard _card;
+        private static IccDetection _cardIdentification;
+        private static HashSet<Tuple<int, int>> _cardBadSectors;
 
         private static IntPtr _obj = IntPtr.Zero;
 
-        private static bool _isInfoNoCardShow = false;
         //--------------------------sector,KeyType ---> slot, nonvolatile, key (6 bite)
         private static Dictionary<Tuple<int, int>, Tuple<int, bool, byte[]>> _keys;
 
@@ -42,11 +41,11 @@ namespace CustomMifareReaderm
         // * Вызывающая сторона может потребовать описание до того как считыватель
         //   инициализирован или если произошла ошибка инициализации
         [Obfuscation]
-        public static int GetErrorDescription(int ErrorCode, [MarshalAs(UnmanagedType.LPWStr)] ref string DescriptionBuf,
-            int BufLen, IntPtr Obj)
+        public static int GetErrorDescription(int errorCode, [MarshalAs(UnmanagedType.LPWStr)] ref string descriptionBuf,
+            int bufLen, IntPtr obj)
         {
             string text =
-                $"!!! GetErrorDescription !!!\tobj:{Obj}\terr:{ErrorCode}\tDescriptionBuf:{DescriptionBuf}\tbufLen:{BufLen}\t";
+                $"!!! GetErrorDescription !!!\tobj:{obj}\terr:{errorCode}\tDescriptionBuf:{descriptionBuf}\tbufLen:{bufLen}\t";
             WriteToLog(text);
             try
             {
@@ -54,7 +53,7 @@ namespace CustomMifareReaderm
             }
             catch (Exception e)
             {
-                WriteToLog($"GetErrorDescription ERROR !!! {text}\r\n {e.ToString()}", true);
+                WriteToLog($"GetErrorDescription ERROR !!! {text}\r\n {e}", true);
                 return (int) ErrorCodes.E_GENERIC;
             }
         }
@@ -63,11 +62,11 @@ namespace CustomMifareReaderm
         //   ItemsBuf - выходной буфер. Названия логических устройств разделены символом #0
         //   BufLen - длина выходного буфера в символах
         [Obfuscation]
-        public static int GetLogicalDevices([MarshalAs(UnmanagedType.LPWStr)] ref IntPtr ItemsBuf, ref int BufLen,
-            IntPtr Obj)
+        public static int GetLogicalDevices([MarshalAs(UnmanagedType.LPWStr)] ref IntPtr itemsBuf, ref int bufLen,
+            IntPtr obj)
         {
             string text =
-                $"!!! GetLogicalDevices !!!\tobj:{Obj}\tItemsBuf:{ItemsBuf}\tbufLen:{BufLen}\t";
+                $"!!! GetLogicalDevices !!!\tobj:{obj}\tItemsBuf:{itemsBuf}\tbufLen:{bufLen}\t";
             WriteToLog(text);
             try
             {
@@ -75,17 +74,17 @@ namespace CustomMifareReaderm
                 string res = "";
                 Array.ForEach(readers, t => res += (string.IsNullOrWhiteSpace(res) ? "" : "#0") + t);
                 res += '\0';
-                BufLen = readers.Length;
+                bufLen = readers.Length;
                 text = $"!!! GetLogicalDevices !!!\tLogicalDevices:{res}";
                 WriteToLog(text);
 
-                UnMemory<char>.SaveInMemArr(res.ToCharArray(), ref ItemsBuf);
+                UnMemory<char>.SaveInMemArr(res.ToCharArray(), ref itemsBuf);
 
                 return (int) ErrorCodes.E_SUCCESS;
             }
             catch (Exception e)
             {
-                WriteToLog($"GetLogicalDevices ERROR !!! {text}\r\n {e.ToString()}", true);
+                WriteToLog($"GetLogicalDevices ERROR !!! {text}\r\n {e}", true);
                 return (int) ErrorCodes.E_GENERIC;
             }
         }
@@ -95,27 +94,27 @@ namespace CustomMifareReaderm
         //   Caps - возможности считывателя
         //   Obj - ссылка на объект считывателя
         [Obfuscation]
-        public static int Init([MarshalAs(UnmanagedType.LPWStr)] string InitStr, IntPtr Caps, ref IntPtr Obj)
+        public static int Init(/*[MarshalAs(UnmanagedType.LPWStr)]* string*/ IntPtr initStr, IntPtr caps, ref IntPtr obj)
         {
             string text =
-                $"!!! Init !!!\tobj:{Obj}\tCaps:{Caps}\tInitStr:{InitStr ?? "null"}\t";
+                $"!!! Init !!!\tobj:{obj}\tCaps:{caps}\tInitStr:{Marshal.PtrToStringBSTR(initStr) ?? "null"}\t";
             WriteToLog(text);
             try
             {
-                UnMemory<int>.SaveInMemArr(new int[] {12, 1, 0}, ref Caps);
+                UnMemory<int>.SaveInMemArr(new[] {12, 1, 0}, ref caps);
 
-                var caps = UnMemory<int>.ReadInMemArr(Caps, 3);
+                var capsR = UnMemory<int>.ReadInMemArr(caps, 3);
 
                 text =
-                    $"!!! Init internal Caps !!!\tsize:{caps[0]}\tVolatileKeySlotCount:{caps[1]}\tNonvolatileKeySlotCount:{caps[2]}\t";
+                    $"!!! Init internal Caps !!!\tsize:{capsR[0]}\tVolatileKeySlotCount:{capsR[1]}\tNonvolatileKeySlotCount:{capsR[2]}\t";
                 WriteToLog(text);
 
                 var res = InitializeReader().Result;
 
                 // выделение  памяти под obj
-                int _pInt = 0;
-                UnMemory<int>.SaveInMem(_pInt, ref Obj);
-                _obj = Obj;
+                int pInt = 0;
+                UnMemory<int>.SaveInMem(pInt, ref obj);
+                _obj = obj;
 
                 if (_keys == null)
                     _keys = new Dictionary<Tuple<int, int>, Tuple<int, bool, byte[]>>();
@@ -126,7 +125,7 @@ namespace CustomMifareReaderm
             }
             catch (Exception e)
             {
-                WriteToLog($"Init ERROR !!! {text}\r\n {e.ToString()}", true);
+                WriteToLog($"Init ERROR !!! {text}\r\n {e}", true);
                 return (int) ErrorCodes.E_CARDREADER_NOT_INIT;
             }
         }
@@ -134,10 +133,10 @@ namespace CustomMifareReaderm
         // Деинициализация считывателя (IntPtr Obj);
         // Obj - ссылка на объект считывателя
         [Obfuscation]
-        public static int Deinit(IntPtr Obj)
+        public static int Deinit(IntPtr obj)
         {
             string text =
-                $"!!! Deinit !!!\tobj:{Obj}\t";
+                $"!!! Deinit !!!\tobj:{obj}\t";
             WriteToLog(text);
             try
             {
@@ -150,7 +149,7 @@ namespace CustomMifareReaderm
             }
             catch (Exception e)
             {
-                WriteToLog($"Deinit ERROR !!! {text}\r\n {e.ToString()}", true);
+                WriteToLog($"Deinit ERROR !!! {text}\r\n {e}", true);
                 return (int) ErrorCodes.E_GENERIC;
             }
         }
@@ -164,27 +163,27 @@ namespace CustomMifareReaderm
         //   KeyIndex - номер ключа (KEY_SLOT_0 + n)
         //   Key - данные ключа, 6 байт
         [Obfuscation]
-        public static int LoadKey(IntPtr Obj, int Sector, int KeyType_int, bool NonvolatileMemory, int KeyIndex, IntPtr Key)
+        public static int LoadKey(IntPtr obj, int sector, int keyTypeInt, bool nonvolatileMemory, int keyIndex, IntPtr key)
         {
             string text =
-                $"!!! LoadKey !!!\tobj:{Obj}\tSector:{Sector}\tKeyType:{KeyType_int}\tNonvolatileMemory:{NonvolatileMemory}\tKeyIndex:{KeyIndex}\tKey:{Key}\t";
+                $"!!! LoadKey !!!\tobj:{obj}\tSector:{sector}\tKeyType:{keyTypeInt}\tNonvolatileMemory:{nonvolatileMemory}\tKeyIndex:{keyIndex}\tKey:{key}\t";
             WriteToLog(text);
             try
             {
                 if (_keys != null && _card != null)
                 {
-                    byte[] key = UnMemory<byte>.ReadInMemArr(Key, 6);
-                    _keys[new Tuple<int, int>(Sector, KeyType_int)] = new Tuple<int, bool, byte[]>(KeyIndex, NonvolatileMemory, key);
+                    byte[] keyR = UnMemory<byte>.ReadInMemArr(key, 6);
+                    _keys[new Tuple<int, int>(sector, keyTypeInt)] = new Tuple<int, bool, byte[]>(keyIndex, nonvolatileMemory, keyR);
 
                     text =
-                        $"!!! LoadKey over !!!\tSector:{Sector}\tKeyType:{KeyType_int}\tKeyIndex:{KeyIndex}\tkey:{BitConverter.ToString(key ?? new byte[] {})}\t";
+                        $"!!! LoadKey over !!!\tSector:{sector}\tKeyType:{keyTypeInt}\tKeyIndex:{keyIndex}\tkey:{BitConverter.ToString(keyR ?? new byte[] {})}\t";
                     WriteToLog(text);
                 }
                 return (int) ErrorCodes.E_SUCCESS;
             }
             catch (Exception e)
             {
-                WriteToLog($"LoadKey ERROR !!! {text}\r\n {e.ToString()}", true);
+                WriteToLog($"LoadKey ERROR !!! {text}\r\n {e}", true);
                 return (int) ErrorCodes.E_POS_KEYS_LOAD;
             }
         }
@@ -192,10 +191,10 @@ namespace CustomMifareReaderm
         // Поиск стандартных меток
         // Obj - ссылка на объект считывателя
         [Obfuscation]
-        public static int RequestStandard(IntPtr Obj)
+        public static int RequestStandard(IntPtr obj)
         {
             string text =
-                $"!!! RequestStandard !!!\tobj:{Obj}\t";
+                $"!!! RequestStandard !!!\tobj:{obj}\t";
             WriteToLog(text);
             try
             {
@@ -205,7 +204,7 @@ namespace CustomMifareReaderm
             }
             catch (Exception e)
             {
-                WriteToLog($"RequestStandard ERROR !!! {text}\r\n {e.ToString()}", true);
+                WriteToLog($"RequestStandard ERROR !!! {text}\r\n {e}", true);
                 return (int) ErrorCodes.E_GENERIC;
             }
         }
@@ -213,22 +212,26 @@ namespace CustomMifareReaderm
         // Поиск всех меток
         // Obj - ссылка на объект считывателя
         [Obfuscation]
-        public static int RequestAll(IntPtr Obj)
+        public static int RequestAll(IntPtr obj)
         {
             string text =
-                $"!!! RequestAll !!!\tobj:{Obj}\t";
+                $"!!! RequestAll !!!\tobj:{obj}\t";
             WriteToLog(text);
-            try
-            {
-                InitCard();
+            if (_card != null)
+                try
+                {
+                    InitCard();
 
-                return (int) ErrorCodes.E_SUCCESS;
-            }
-            catch (Exception e)
-            {
-                WriteToLog($"RequestAll ERROR !!! {text}\r\n {e.ToString()}", true);
-                return (int)ErrorCodes.E_CARDREADER_NOT_INIT;
-            }
+                    return (int) ErrorCodes.E_SUCCESS;
+                }
+                catch (Exception e)
+                {
+                    WriteToLog($"RequestAll ERROR !!! {text}\r\n {e}", true);
+                }
+
+            Thread.Sleep(500);
+
+            return (int)ErrorCodes.E_CARDREADER_NOT_INIT;
         }
 
         // Получение номера какой-либо метки (const Obj : Pointer; const SerialNumberBuf : Pointer; const BufSize : Integer; const SerialNumberSize : PInteger) : Integer;
@@ -237,27 +240,28 @@ namespace CustomMifareReaderm
         //   BufSize - размер выходного буфера
         //   SerialNumberSize - размер считанного аппаратного номера карты в байтах (обычно 4 или 7)
         [Obfuscation]
-        public static int Anticollision(IntPtr Obj, IntPtr SerialNumberBuf, int BufSize, IntPtr SerialNumberSize)
+        public static int Anticollision(IntPtr obj, IntPtr serialNumberBuf, int bufSize, IntPtr serialNumberSize)
         {
             string text =
-                $"!!! Anticollision !!!\tobj:{Obj}\tSerialNumberBuf:{SerialNumberBuf}\tBufSize:{BufSize}\tSerialNumberSize:{SerialNumberSize}\t";
+                $"!!! Anticollision !!!\tobj:{obj}\tSerialNumberBuf:{serialNumberBuf}\tBufSize:{bufSize}\tSerialNumberSize:{serialNumberSize}\t";
             WriteToLog(text);
+
             try
             {
                 var uid = _card?.GetUid().Result;
                 if (uid != null)
                 {
-                    byte[] truncUid = new byte[Math.Min(BufSize, uid.Length)];
+                    byte[] truncUid = new byte[Math.Min(bufSize, uid.Length)];
                     Array.Copy(uid, truncUid, truncUid.Length);
-                    UnMemory<int>.SaveInMem(truncUid.Length, ref SerialNumberSize);
-                    UnMemory<byte>.SaveInMemArr(uid, ref SerialNumberBuf);
+                    UnMemory<int>.SaveInMem(truncUid.Length, ref serialNumberSize);
+                    UnMemory<byte>.SaveInMemArr(uid, ref serialNumberBuf);
                     //Marshal.StructureToPtr(memory_object, SerialNumberBuf, true);
 
-                    var uidWrited = UnMemory<byte>.ReadInMemArr(SerialNumberBuf, truncUid.Length);
-                    var serialNumberSizeWrited = UnMemory<int>.ReadInMem(SerialNumberSize);
+                    var uidWrited = UnMemory<byte>.ReadInMemArr(serialNumberBuf, truncUid.Length);
+                    var serialNumberSizeWrited = UnMemory<int>.ReadInMem(serialNumberSize);
 
                     text =
-                        $"!!! Anticollision over !!!\tobj:{Obj}\tSerialNumberBuf:{SerialNumberBuf}\tBufSize:{BufSize}\tuid:{BitConverter.ToString(uid)}\tuid_w:{BitConverter.ToString(uidWrited ?? new byte[] {})}\tSerialNumberSize:{SerialNumberSize}\tSerialNumberSize_writed:{serialNumberSizeWrited}\t";
+                        $"!!! Anticollision over !!!\tobj:{obj}\tSerialNumberBuf:{serialNumberBuf}\tBufSize:{bufSize}\tuid:{BitConverter.ToString(uid)}\tuid_w:{BitConverter.ToString(uidWrited ?? new byte[] {})}\tSerialNumberSize:{serialNumberSize}\tSerialNumberSize_writed:{serialNumberSizeWrited}\t";
                     WriteToLog(text);
                     return (int) ErrorCodes.E_SUCCESS;
                 }
@@ -265,7 +269,7 @@ namespace CustomMifareReaderm
             }
             catch (Exception e)
             {
-                WriteToLog($"Anticollision ERROR !!! {text}\r\n {e.ToString()}", true);
+                WriteToLog($"Anticollision ERROR !!! {text}\r\n {e}", true);
                 return (int) ErrorCodes.E_GENERIC;
             }
         }
@@ -275,23 +279,23 @@ namespace CustomMifareReaderm
         //   SerialNumber - серийный номер метки
         //   SerialNumberSize - размер серийного номера метки в байтах
         [Obfuscation]
-        public static int SelectCard(IntPtr Obj, IntPtr SerialNumber, int SerialNumberSize)
+        public static int SelectCard(IntPtr obj, IntPtr serialNumber, int serialNumberSize)
         {
             string text =
-                $"!!! SelectCard !!!\tobj:{Obj}\tSerialNumber:{SerialNumber}\tSerialNumberSize:{SerialNumberSize}\t";
+                $"!!! SelectCard !!!\tobj:{obj}\tSerialNumber:{serialNumber}\tSerialNumberSize:{serialNumberSize}\t";
             WriteToLog(text);
             try
             {
-                byte[] uid = UnMemory<byte>.ReadInMemArr(SerialNumber, SerialNumberSize);
+                byte[] uid = UnMemory<byte>.ReadInMemArr(serialNumber, serialNumberSize);
 
                 text =
-                    $"!!! SelectCard over !!!\tobj:{Obj}\tSerialNumber:{SerialNumber}\tSerialNumberSize:{SerialNumberSize}\tuid:{BitConverter.ToString(uid ?? new byte[] {})}\t";
+                    $"!!! SelectCard over !!!\tobj:{obj}\tSerialNumber:{serialNumber}\tSerialNumberSize:{serialNumberSize}\tuid:{BitConverter.ToString(uid ?? new byte[] {})}\t";
                 WriteToLog(text);
                 return (int) ErrorCodes.E_SUCCESS;
             }
             catch (Exception e)
             {
-                WriteToLog($"SelectCard ERROR !!! {text}\r\n {e.ToString()}", true);
+                WriteToLog($"SelectCard ERROR !!! {text}\r\n {e}", true);
                 return (int) ErrorCodes.E_GENERIC;
             }
         }
@@ -303,23 +307,23 @@ namespace CustomMifareReaderm
         //   NonvolatileMemory - аутентификация ключа из энергонезависимой памяти
         //   KeyIndex - номер ключа (KEY_SLOT_0 + n)
         [Obfuscation]
-        public static int Authentication(IntPtr Obj, int Sector, int KeyType_int, bool NonvolatileMemory, int KeyIndex)
+        public static int Authentication(IntPtr obj, int sector, int keyTypeInt, bool nonvolatileMemory, int keyIndex)
         {
             string text =
-                $"!!! Authentication !!!\tobj:{Obj}\tSector:{Sector}\tKeyType:{KeyType_int}\tNonvolatileMemory:{NonvolatileMemory}\tKeyIndex:{KeyIndex}\t";
+                $"!!! Authentication !!!\tobj:{obj}\tSector:{sector}\tKeyType:{keyTypeInt}\tNonvolatileMemory:{nonvolatileMemory}\tKeyIndex:{keyIndex}\t";
             WriteToLog(text);
             try
             {
                 if (_reader == null || _card == null)
                     return (int)ErrorCodes.E_CARDREADER_NOT_INIT;
 
-                var keyA = GetKeyFromCollection(Sector, 0);
-                var keyB = GetKeyFromCollection(Sector, 1);
+                var keyA = GetKeyFromCollection(sector, 0);
+                var keyB = GetKeyFromCollection(sector, 1);
 
                 if (/*KeyType_int == 0 &&*/ keyA != null)
-                    _card.AddOrUpdateSectorKeySet(new SectorKeySet { KeyType = KeyType.KeyA, Sector = Sector, Key = keyA });
+                    _card.AddOrUpdateSectorKeySet(new SectorKeySet { KeyType = KeyType.KeyA, Sector = sector, Key = keyA });
                 if (/*KeyType_int == 1 &&*/ keyB != null)
-                    _card.AddOrUpdateSectorKeySet(new SectorKeySet { KeyType = KeyType.KeyB, Sector = Sector, Key = keyB });
+                    _card.AddOrUpdateSectorKeySet(new SectorKeySet { KeyType = KeyType.KeyB, Sector = sector, Key = keyB });
 /*
                 var sec = _card.GetSector(Sector);
 
@@ -335,7 +339,7 @@ namespace CustomMifareReaderm
             }
             catch (Exception e)
             {
-                WriteToLog($"Authentication ERROR !!! {text}\r\n {e.ToString()}", true);
+                WriteToLog($"Authentication ERROR !!! {text}\r\n {e}", true);
                 return (int)ErrorCodes.E_CARDREADER_NOT_INIT;
             }
         }
@@ -345,10 +349,10 @@ namespace CustomMifareReaderm
         //   Block - индекс блока [0..255] (считается от начала карты, не от начала сектора)
         //   Buffer - буфер карты, 16 байт
         [Obfuscation]
-        public static int ReadBlock(IntPtr Obj, int Block, IntPtr Buffer)
+        public static int ReadBlock(IntPtr obj, int block, IntPtr buffer)
         {
             string text =
-                $"!!! ReadBlock !!!\tobj:{Obj}\tBlock:{Block}\tBuffer:{Buffer}\t";
+                $"!!! ReadBlock !!!\tobj:{obj}\tBlock:{block}\tBuffer:{buffer}\t";
             WriteToLog(text);
             try
             {
@@ -356,7 +360,7 @@ namespace CustomMifareReaderm
                 {
                     int blockInSector;
                     int controlSector;
-                    BlockToSectorBlock(Block, out controlSector, out blockInSector);
+                    BlockToSectorBlock(block, out controlSector, out blockInSector);
 
                     var keyA = GetKeyFromCollection(controlSector, 0);
                     var keyB = GetKeyFromCollection(controlSector, 1);
@@ -373,7 +377,7 @@ namespace CustomMifareReaderm
                         if (dataBadSectors.Length > 0 && dataBadSectors.Length < 17)
                         {
                             WriteToLog($"SaveInMemory from file {dataBadSectors.Length} byte");
-                            UnMemory<byte>.SaveInMemArr(dataBadSectors, ref Buffer);
+                            UnMemory<byte>.SaveInMemArr(dataBadSectors, ref buffer);
                         }
 
                         //TODO убрать логи чтения и записи
@@ -386,7 +390,7 @@ namespace CustomMifareReaderm
                     if (data.Length > 0 && data.Length < 17)
                     {
                         WriteToLog($"SaveInMemory {data.Length} byte");
-                        UnMemory<byte>.SaveInMemArr(data, ref Buffer);
+                        UnMemory<byte>.SaveInMemArr(data, ref buffer);
 
                         //TODO убрать логи чтения и записи
                         //WriteToLog($"Sector '{controlSector}':[{blockInSector}]{data.ByteArrayToString()}");
@@ -400,7 +404,7 @@ namespace CustomMifareReaderm
             }
             catch (Exception e)
             {
-                WriteToLog($"ReadBlock ERROR !!! {text}\r\n {e.ToString()}", true);
+                WriteToLog($"ReadBlock ERROR !!! {text}\r\n {e}", true);
                 return (int)ErrorCodes.E_GENERIC;
             }
         }
@@ -410,16 +414,16 @@ namespace CustomMifareReaderm
             try
             {
                 if (keyA != null)
-                    _card.AddOrUpdateSectorKeySet(new SectorKeySet() { KeyType = KeyType.KeyA, Sector = sector, Key = keyA });
+                    _card.AddOrUpdateSectorKeySet(new SectorKeySet { KeyType = KeyType.KeyA, Sector = sector, Key = keyA });
                 if (keyB != null)
-                    _card.AddOrUpdateSectorKeySet(new SectorKeySet() { KeyType = KeyType.KeyB, Sector = sector, Key = keyB });
+                    _card.AddOrUpdateSectorKeySet(new SectorKeySet { KeyType = KeyType.KeyB, Sector = sector, Key = keyB });
 
                 var sec = _card.GetSector(sector);
                 result = await sec.GetData(blockInSector);
             }
             catch (Exception e)
             {
-                WriteToLog($"GetData ERROR !!! {e.ToString()}", true);
+                WriteToLog($"GetData ERROR !!! {e}", true);
             }
             return result;
         }
@@ -429,10 +433,10 @@ namespace CustomMifareReaderm
         //   Block - индекс блока [0..255] (считается от начала карты, не от начала сектора)
         //   Data - данные блока для записи (16 байт)
         [Obfuscation]
-        public static int WriteBlock(IntPtr Obj, int Block, IntPtr Data)
+        public static int WriteBlock(IntPtr obj, int block, IntPtr data)
         {
             string text =
-                $"!!! WriteBlock !!!\tobj:{Obj}\tBlock:{Block}\tData:{Data}\t";
+                $"!!! WriteBlock !!!\tobj:{obj}\tBlock:{block}\tData:{data}\t";
 
             WriteToLog(text);
             try
@@ -441,21 +445,21 @@ namespace CustomMifareReaderm
                 {
                     int blockInSector;
                     int controlSector;
-                    BlockToSectorBlock(Block, out controlSector, out blockInSector);
+                    BlockToSectorBlock(block, out controlSector, out blockInSector);
 
-                    byte[] data = UnMemory<byte>.ReadInMemArr(Data, 16);
+                    byte[] dat = UnMemory<byte>.ReadInMemArr(data, 16);
 
                     var keyA = GetKeyFromCollection(controlSector, 0);
                     var keyB = GetKeyFromCollection(controlSector, 1);
 
                     text =
-                        $"!!! WriteBlock internal !!!\tcurrentSector: {controlSector}\tblockInSector: {blockInSector}\tkeyA: {BitConverter.ToString(keyA ?? new byte[] { })}\tkeyB: {BitConverter.ToString(keyB ?? new byte[] { })}\tData:{BitConverter.ToString(data ?? new byte[] { })}\t";
+                        $"!!! WriteBlock internal !!!\tcurrentSector: {controlSector}\tblockInSector: {blockInSector}\tkeyA: {BitConverter.ToString(keyA ?? new byte[] { })}\tkeyB: {BitConverter.ToString(keyB ?? new byte[] { })}\tData:{BitConverter.ToString(dat ?? new byte[] { })}\t";
                     WriteToLog(text);
 
                     //TODO убрать
                     if (_cardBadSectors?.Contains(new Tuple<int, int>(controlSector, blockInSector)) ?? false)
                     {
-                        WriteOrReplaceToFileSector(controlSector, blockInSector, data);
+                        WriteOrReplaceToFileSector(controlSector, blockInSector, dat);
                         text = "!!! WriteBlock to file!";
                         WriteToLog(text);
                         return (int)ErrorCodes.E_SUCCESS;
@@ -463,9 +467,9 @@ namespace CustomMifareReaderm
 
                     //WriteDataToLog(controlSector, blockInSector, data.ByteArrayToString(), true);
 
-                    var result = SetData(data, controlSector, blockInSector, keyA, keyB).Result;
+                    var result = SetData(dat, controlSector, blockInSector, keyA, keyB).Result;
                     if (result == (int) ErrorCodes.E_SUCCESS)
-                        result = Transfer(Obj, Block);
+                        result = Transfer(obj, block);
 
                     return result;
                 }
@@ -473,21 +477,23 @@ namespace CustomMifareReaderm
             }
             catch (Exception e)
             {
-                WriteToLog($"WriteBlock ERROR !!! {text}\r\n {e.ToString()}", true);
+                WriteToLog($"WriteBlock ERROR !!! {text}\r\n {e}", true);
                 return (int)ErrorCodes.E_GENERIC;
             }
         }
         private static async Task<int> SetData(byte[] data, int sector, int blockInSector, byte[] keyA, byte[] keyB)
         {
             if (data == null)
+            {
+                WriteToLog("!!!! SetData ERROR !!! data null");
                 throw new Exception("!!!! SetData ERROR !!! data null");
-
+            }
             try
             {
                 if (keyA != null)
-                    _card.AddOrUpdateSectorKeySet(new SectorKeySet() { KeyType = KeyType.KeyA, Sector = sector, Key = keyA });
+                    _card.AddOrUpdateSectorKeySet(new SectorKeySet { KeyType = KeyType.KeyA, Sector = sector, Key = keyA });
                 if (keyB != null)
-                    _card.AddOrUpdateSectorKeySet(new SectorKeySet() { KeyType = KeyType.KeyB, Sector = sector, Key = keyB });
+                    _card.AddOrUpdateSectorKeySet(new SectorKeySet { KeyType = KeyType.KeyB, Sector = sector, Key = keyB });
 
                 var sec = _card.GetSector(sector);
                 if (blockInSector == sec.NumDataBlocks - 1)
@@ -511,7 +517,7 @@ namespace CustomMifareReaderm
             }
             catch (Exception e)
             {
-                WriteToLog($"SetData ERROR !!! {e.ToString()}", true);
+                WriteToLog($"SetData ERROR !!! {e}", true);
                 return (int)ErrorCodes.E_GENERIC;
             }
         }
@@ -521,10 +527,10 @@ namespace CustomMifareReaderm
         //   Block - индекс блока [0..255] (считается от начала карты, не от начала сектора)
         //   Value - Значение, на которое будет уменьшен счетчик блока
         [Obfuscation]
-        public static int Decrement(IntPtr Obj, int Block, int Value)
+        public static int Decrement(IntPtr obj, int block, int value)
         {
             string text =
-                $"!!! Decrement !!!\tobj:{Obj}\tBlock:{Block}\tValue:{Value}\t";
+                $"!!! Decrement !!!\tobj:{obj}\tBlock:{block}\tValue:{value}\t";
             WriteToLog(text);
             try
             {
@@ -532,7 +538,7 @@ namespace CustomMifareReaderm
                 {
                     int blockInSector;
                     int controlSector;
-                    BlockToSectorBlock(Block, out controlSector, out blockInSector);
+                    BlockToSectorBlock(block, out controlSector, out blockInSector);
 
                     var keyA = GetKeyFromCollection(controlSector, 0);
                     var keyB = GetKeyFromCollection(controlSector, 1);
@@ -544,7 +550,7 @@ namespace CustomMifareReaderm
                     if (_cardBadSectors?.Contains(new Tuple<int, int>(controlSector, blockInSector)) ?? false)
                     {
                         byte[] dataBadSectors = ReadFromFileSector(controlSector, blockInSector);
-                        IncDecByteArray(ref dataBadSectors, -Value);
+                        IncDecByteArray(ref dataBadSectors, -value);
                         WriteOrReplaceToFileSector(controlSector, blockInSector, dataBadSectors);
                         //TODO убрать логи чтения и записи
                         //WriteToLog($"Decremented sector in file '{controlSector}':[{blockInSector}]{dataBadSectors.ByteArrayToString()}");
@@ -554,11 +560,11 @@ namespace CustomMifareReaderm
                     }
 
                     byte[] data = GetData(controlSector, blockInSector, keyA, keyB).Result;
-                    IncDecByteArray(ref data, -Value);
+                    IncDecByteArray(ref data, -value);
                     var result = SetData(data, controlSector, blockInSector, keyA, keyB).Result;
 
                     if (result == (int)ErrorCodes.E_SUCCESS)
-                        result = Transfer(Obj, Block);
+                        result = Transfer(obj, block);
 
                     //TODO убрать логи чтения и записи
                     //WriteToLog($"Decremented sector '{controlSector}':[{blockInSector}]{data.ByteArrayToString()}");
@@ -570,7 +576,7 @@ namespace CustomMifareReaderm
             }
             catch (Exception e)
             {
-                WriteToLog($"Decrement ERROR !!! {text}\r\n {e.ToString()}", true);
+                WriteToLog($"Decrement ERROR !!! {text}\r\n {e}", true);
                 return (int)ErrorCodes.E_GENERIC;
             }
         }
@@ -580,10 +586,10 @@ namespace CustomMifareReaderm
         //   Block - индекс блока [0..255] (считается от начала карты, не от начала сектора)
         //   Value - Значение, на которое будет увеличен счетчик блока
         [Obfuscation]
-        public static int Increment(IntPtr Obj, int Block, int Value)
+        public static int Increment(IntPtr obj, int block, int value)
         {
             string text =
-                $"!!! Increment !!!\tobj:{Obj}\tBlock:{Block}\tValue:{Value}\t";
+                $"!!! Increment !!!\tobj:{obj}\tBlock:{block}\tValue:{value}\t";
             WriteToLog(text);
             try
             {
@@ -591,7 +597,7 @@ namespace CustomMifareReaderm
                 {
                     int blockInSector;
                     int controlSector;
-                    BlockToSectorBlock(Block, out controlSector, out blockInSector);
+                    BlockToSectorBlock(block, out controlSector, out blockInSector);
 
                     var keyA = GetKeyFromCollection(controlSector, 0);
                     var keyB = GetKeyFromCollection(controlSector, 1);
@@ -603,7 +609,7 @@ namespace CustomMifareReaderm
                     if (_cardBadSectors?.Contains(new Tuple<int, int>(controlSector, blockInSector)) ?? false)
                     {
                         byte[] dataBadSectors = ReadFromFileSector(controlSector, blockInSector);
-                        IncDecByteArray(ref dataBadSectors, Value);
+                        IncDecByteArray(ref dataBadSectors, value);
                         WriteOrReplaceToFileSector(controlSector, blockInSector, dataBadSectors);
                         //TODO убрать логи чтения и записи
                         //WriteToLog($"Incremented sector in file '{controlSector}':[{blockInSector}]{dataBadSectors.ByteArrayToString()}");
@@ -613,11 +619,11 @@ namespace CustomMifareReaderm
                     }
 
                     byte[] data = GetData(controlSector, blockInSector, keyA, keyB).Result;
-                    IncDecByteArray(ref data, Value);
+                    IncDecByteArray(ref data, value);
                     var result = SetData(data, controlSector, blockInSector, keyA, keyB).Result;
 
                     if (result == (int)ErrorCodes.E_SUCCESS)
-                        result = Transfer(Obj, Block);
+                        result = Transfer(obj, block);
 
                     //TODO убрать логи чтения и записи
                     //WriteToLog($"Incremented sector '{controlSector}':[{blockInSector}]{data.ByteArrayToString()}");
@@ -629,17 +635,17 @@ namespace CustomMifareReaderm
             }
             catch (Exception e)
             {
-                WriteToLog($"Increment ERROR !!! {text}\r\n {e.ToString()}", true);
+                WriteToLog($"Increment ERROR !!! {text}\r\n {e}", true);
                 return (int)ErrorCodes.E_GENERIC;
             }
         }
 
         // Восстановить значение блока (const Obj : Pointer; const Block : Integer) : Integer; stdcall;
         [Obfuscation]
-        public static int Restore(IntPtr Obj, int Block)
+        public static int Restore(IntPtr obj, int block)
         {
             string text =
-                $"!!! Restore !!!\tobj:{Obj}\tBlock:{Block}\t";
+                $"!!! Restore !!!\tobj:{obj}\tBlock:{block}\t";
             WriteToLog(text);
             try
             {
@@ -647,7 +653,7 @@ namespace CustomMifareReaderm
                 {
                     int blockInSector;
                     int controlSector;
-                    BlockToSectorBlock(Block, out controlSector, out blockInSector);
+                    BlockToSectorBlock(block, out controlSector, out blockInSector);
 
                     var keyA = GetKeyFromCollection(controlSector, 0);
                     var keyB = GetKeyFromCollection(controlSector, 1);
@@ -657,9 +663,9 @@ namespace CustomMifareReaderm
                     WriteToLog(text);
 
                     if (keyA != null)
-                        _card.AddOrUpdateSectorKeySet(new SectorKeySet() { KeyType = KeyType.KeyA, Sector = controlSector, Key = keyA });
+                        _card.AddOrUpdateSectorKeySet(new SectorKeySet { KeyType = KeyType.KeyA, Sector = controlSector, Key = keyA });
                     if (keyB != null)
-                        _card.AddOrUpdateSectorKeySet(new SectorKeySet() { KeyType = KeyType.KeyB, Sector = controlSector, Key = keyB });
+                        _card.AddOrUpdateSectorKeySet(new SectorKeySet { KeyType = KeyType.KeyB, Sector = controlSector, Key = keyB });
 
                     var sec = _card.GetSector(controlSector);
 
@@ -669,7 +675,7 @@ namespace CustomMifareReaderm
 
                     int result = (int)ErrorCodes.E_SUCCESS;
                     if (sec.RestoreData(blockInSector).Result)
-                        result = Transfer(Obj, Block);
+                        result = Transfer(obj, block);
 
                     return result;
                 }
@@ -677,17 +683,17 @@ namespace CustomMifareReaderm
             }
             catch (Exception e)
             {
-                WriteToLog($"Restore ERROR !!! {text}\r\n {e.ToString()}", true);
+                WriteToLog($"Restore ERROR !!! {text}\r\n {e}", true);
                 return (int)ErrorCodes.E_GENERIC;
             }
         }
 
         // Применить изменения (const Obj : Pointer; const Block : Integer) : Integer; stdcall;
         [Obfuscation]
-        public static int Transfer(IntPtr Obj, int Block)
+        public static int Transfer(IntPtr obj, int block)
         {
             string text =
-                $"!!! Transfer !!!\tobj:{Obj}\tBlock:{Block}\t";
+                $"!!! Transfer !!!\tobj:{obj}\tBlock:{block}\t";
             WriteToLog(text);
             try
             {
@@ -695,7 +701,7 @@ namespace CustomMifareReaderm
                 {
                     int blockInSector;
                     int controlSector;
-                    BlockToSectorBlock(Block, out controlSector, out blockInSector);
+                    BlockToSectorBlock(block, out controlSector, out blockInSector);
 
                     var keyA = GetKeyFromCollection(controlSector, 0);
                     var keyB = GetKeyFromCollection(controlSector, 1);
@@ -714,7 +720,7 @@ namespace CustomMifareReaderm
             }
             catch (Exception e)
             {
-                WriteToLog($"Transfer ERROR !!! {text}\r\n {e.ToString()}", true);
+                WriteToLog($"Transfer ERROR !!! {text}\r\n {e}", true);
                 return (int)ErrorCodes.E_GENERIC;
             }
         }
@@ -723,27 +729,27 @@ namespace CustomMifareReaderm
             try
             {
                 if (keyA != null)
-                    _card.AddOrUpdateSectorKeySet(new SectorKeySet() { KeyType = KeyType.KeyA, Sector = sector, Key = keyA });
+                    _card.AddOrUpdateSectorKeySet(new SectorKeySet { KeyType = KeyType.KeyA, Sector = sector, Key = keyA });
                 if (keyB != null)
-                    _card.AddOrUpdateSectorKeySet(new SectorKeySet() { KeyType = KeyType.KeyB, Sector = sector, Key = keyB });
+                    _card.AddOrUpdateSectorKeySet(new SectorKeySet { KeyType = KeyType.KeyB, Sector = sector, Key = keyB });
 
                 var sec = _card.GetSector(sector);
                 await sec.Flush();
                 if (blockInSector == sec.NumDataBlocks - 1)
                 {
                     if (keyA != null)
-                        _card.AddOrUpdateSectorKeySet(new SectorKeySet() { KeyType = KeyType.KeyA, Sector = sector, Key = keyA });
+                        _card.AddOrUpdateSectorKeySet(new SectorKeySet { KeyType = KeyType.KeyA, Sector = sector, Key = keyA });
                     if (keyB != null)
-                        _card.AddOrUpdateSectorKeySet(new SectorKeySet() { KeyType = KeyType.KeyB, Sector = sector, Key = keyB });
+                        _card.AddOrUpdateSectorKeySet(new SectorKeySet { KeyType = KeyType.KeyB, Sector = sector, Key = keyB });
 
                     if (keyA != null && keyB != null)
-                        await sec.FlushTrailer(keyA?.ByteArrayToString(), keyB?.ByteArrayToString());
+                        await sec.FlushTrailer(keyA.ByteArrayToString(), keyB.ByteArrayToString());
                 }
                 return (int)ErrorCodes.E_SUCCESS;
             }
             catch (Exception e)
             {
-                WriteToLog($"FlushData ERROR !!! \r\n {e.ToString()}", true);
+                WriteToLog($"FlushData ERROR !!! \r\n {e}", true);
                 return (int)ErrorCodes.E_GENERIC;
             }
         }
@@ -751,10 +757,10 @@ namespace CustomMifareReaderm
         // Отключиться от карты (const Obj : Pointer) : Integer; stdcall;
         //   Obj - ссылка на объект считывателя
         [Obfuscation]
-        public static int Halt(IntPtr Obj)
+        public static int Halt(IntPtr obj)
         {
             string text =
-                $"!!! Halt !!!\tobj:{Obj}\t";
+                $"!!! Halt !!!\tobj:{obj}\t";
             WriteToLog(text);
             try
             {
@@ -763,12 +769,12 @@ namespace CustomMifareReaderm
             }
             catch (Exception e)
             {
-                WriteToLog($"Halt ERROR !!! {text}\r\n {e.ToString()}", true);
+                WriteToLog($"Halt ERROR !!! {text}\r\n {e}", true);
                 return (int)ErrorCodes.E_GENERIC;
             }
         }
 
-        private static int write_count = 0;
+        private static int _writeCount;
         private static void WriteToLog(string text, bool showMsg = false)
         {
             bool logIsError = text.Contains("ERROR");
@@ -784,57 +790,59 @@ namespace CustomMifareReaderm
             {
                 using (StreamWriter sw = File.CreateText(path))
                 {
-                    sw.Write($"[{write_count}\t{DateTime.Now.ToString()}]: {text}\r\n");
+                    sw.Write($"[{_writeCount}\t{DateTime.Now}]: {text}\r\n");
                 }
             }
             else
             {
                 using (StreamWriter sw = File.AppendText(path))
                 {
-                    sw.Write($"[{write_count}\t{DateTime.Now.ToString()}]: {text}\r\n");
+                    sw.Write($"[{_writeCount}\t{DateTime.Now}]: {text}\r\n");
                 }
             }
-            ++write_count;
-            if (write_count == int.MaxValue)
-                write_count = 0;
+            ++_writeCount;
+            if (_writeCount == int.MaxValue)
+                _writeCount = 0;
         }
 
-        private static int write_data_count = 0;
-        private static void WriteDataToLog(int sector, int block, string data, bool write)
-        {
-            bool writeToLog = false;
-#if DEBUG
-            writeToLog = true;
-#endif
-
-            if (!writeToLog)
-                return;
-            string path = @"Out\DLL_Data_Log.txt";
-            if (/*write_data_count == 0 ||*/ !File.Exists(path))
-            {
-                using (StreamWriter sw = File.CreateText(path))
-                {
-                    sw.Write($"{(write ? "write" : " read")}: {sector} [{block}]\t{DateTime.Now.ToString()}: {data}\r\n");
-                }
-            }
-            else
-            {
-                using (StreamWriter sw = File.AppendText(path))
-                {
-                    sw.Write($"{(write ? "write" : " read")}: {sector} [{block}]\t{DateTime.Now.ToString()}: {data}\r\n");
-                }
-            }
-            ++write_data_count;
-            if (write_data_count == int.MaxValue)
-                write_data_count = 0;
-        }
+        //private static int _writeDataCount;
+//        private static void WriteDataToLog(int sector, int block, string data, bool write)
+//        {
+//            bool writeToLog = false;
+//#if DEBUG
+//            writeToLog = true;
+//#endif
+//
+//            if (!writeToLog)
+//                return;
+//            string path = @"Out\DLL_Data_Log.txt";
+//            if (/*write_data_count == 0 ||*/ !File.Exists(path))
+//            {
+//                using (StreamWriter sw = File.CreateText(path))
+//                {
+//                    sw.Write($"{(write ? "write" : " read")}: {sector} [{block}]\t{DateTime.Now}: {data}\r\n");
+//                }
+//            }
+//            else
+//            {
+//                using (StreamWriter sw = File.AppendText(path))
+//                {
+//                    sw.Write($"{(write ? "write" : " read")}: {sector} [{block}]\t{DateTime.Now}: {data}\r\n");
+//                }
+//            }
+//            ++_writeDataCount;
+//            if (_writeDataCount == int.MaxValue)
+//                _writeDataCount = 0;
+//        }
 
         private static void WriteOrReplaceToFileSector(int sector, int block, byte[] data)
         {
             var uid = _card?.GetUid().Result;
             if (uid == null)
+            {
+                WriteToLog("WriteOrReplaceToFileSector Попытка записи данных в неинициализированную карты");
                 throw new Exception("Попытка записи данных в неинициализированную карты");
-
+            }
             string path = @"Out\file_sector_" + uid.ByteArrayToString() + ".dat";
 
             var fileList = File.ReadAllLines(path).ToList();
@@ -854,8 +862,10 @@ namespace CustomMifareReaderm
         {
             var uid = _card?.GetUid().Result;
             if (uid == null)
-                throw new Exception("Попытка чтения данных с неинициализированной карты");
-
+            {
+                WriteToLog("ReadFromFileSector Попытка чтения данных с неинициализированной карты");
+                throw new Exception();
+            }
             string path = @"Out\file_sector_" + uid.ByteArrayToString() + ".dat";
             var sectors = new Dictionary<Tuple<int, int>, byte[]>();
             if (File.Exists(path))
@@ -881,8 +891,10 @@ namespace CustomMifareReaderm
         {
             var uid = _card?.GetUid().Result;
             if (uid == null)
+            {
+                WriteToLog("ReadBadsFromFileSector Попытка чтения данных с неинициализированной карты");
                 throw new Exception("Попытка чтения данных с неинициализированной карты");
-
+            }
             string path = @"Out\file_sector_" + uid.ByteArrayToString() + ".dat";
 
             var result = new HashSet<Tuple<int, int>>();
@@ -916,38 +928,43 @@ namespace CustomMifareReaderm
             WriteToLog("InitializeReader");
             try
             {
+                if (_reader != null)
+                {
+                    return (int)ErrorCodes.E_SUCCESS;
+                    //_reader.CardAdded -= Reader_CardAdded;
+                    //_reader.CardRemoved -= Reader_CardRemoved;
+                    //_reader = null;
+                    //WriteToLog("ClearReader");
+                }
                 var readers = CardReader.GetReaderNames().ToArray();
                 string currReader = "";
                 if (readers.Length > 0)
                 {
-                    var r = new ReaderSelect();
-                    r.Init(readers);
-                    r.ShowDialog();
-                    currReader = r?.CurrentReader;
+                    //var r = new ReaderSelect();
+                    //r.Init(readers);
+                    //r.ShowDialog();
+                    var r = new INIHelper(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "Mifaread3.ini"));
+                    currReader = r["LogicalDevice"];
                 }
-
                 WriteToLog($"select reader:{currReader}");
+
+                if (!readers.Contains(currReader))
+                    currReader = readers.First();
+
+                _reader = await CardReader.FindAsync(currReader);
+
+                WriteToLog($"reader is:{currReader}");
 
                 if (_reader != null)
                 {
-                    _reader.CardAdded -= Reader_CardAdded;
-                    _reader.CardRemoved -= Reader_CardRemoved;
-                    _reader = null;
-                }
-                if (CardReader.GetReaderNames().Contains(currReader))
-                {
-                    _reader = await CardReader.FindAsync(currReader);
-                    if (_reader != null)
-                    {
-                        _reader.CardAdded += Reader_CardAdded;
-                        _reader.CardRemoved += Reader_CardRemoved;
-                    }
+                    _reader.CardAdded += Reader_CardAdded;
+                    _reader.CardRemoved += Reader_CardRemoved;
                 }
                 return (int)ErrorCodes.E_SUCCESS;
             }
             catch (Exception e)
             {
-                WriteToLog($"InitializeReader ERROR!!!\r\n {e.ToString()}", true);
+                WriteToLog($"InitializeReader ERROR!!!\r\n {e}", true);
                 return (int)ErrorCodes.E_GENERIC;
             }
         }
@@ -961,12 +978,11 @@ namespace CustomMifareReaderm
                 _card = null;
                 _cardBadSectors?.Clear();
                 _keys?.Clear();
-                _isInfoNoCardShow = false;
             }
             catch (Exception e)
             {
-                WriteToLog($"Reader_CardRemoved ERROR!!!\r\n {e.ToString()}", true);
-                throw e;
+                WriteToLog($"Reader_CardRemoved ERROR!!!\r\n {e}", true);
+                throw;
             }
         }
 
@@ -978,12 +994,11 @@ namespace CustomMifareReaderm
                 _card?.Dispose();
                 _card = ev.SmartCard.CreateMiFareCard();
                 _cardBadSectors = ReadBadsFromFileSector();
-                _isInfoNoCardShow = false;
             }
             catch (Exception e)
             {
-                WriteToLog($"Reader_CardAdded ERROR!!!\r\n {e.ToString()}", true);
-                throw e;
+                WriteToLog($"Reader_CardAdded ERROR!!!\r\n {e}", true);
+                throw;
             }
         }
 
@@ -994,23 +1009,23 @@ namespace CustomMifareReaderm
             {
                 if (_card == null)
                 {
-                    if (_isInfoNoCardShow)
-                        return;
+                    //if (_isInfoNoCardShow)
+                    //    return;
 
-                    MessageBox.Show("No card!");
-                    _isInfoNoCardShow = true;
+                    //throw new Exception("No card!");
+                    WriteToLog("ERROR!!! No card!");
 
                     return;
                 }
 
                 _cardIdentification = await _card.GetCardInfo();
-                WriteToLog("Connected to card\r\nPC/SC device class: " + _cardIdentification.PcscDeviceClass.ToString() +
-                           "\r\nCard name: " + _cardIdentification.PcscCardName.ToString());
+                WriteToLog("Connected to card\r\nPC/SC device class: " + _cardIdentification.PcscDeviceClass +
+                            "\r\nCard name: " + _cardIdentification.PcscCardName);
             }
             catch (Exception e)
             {
                 WriteToLog("InitCard ERROR!!!\r\n" + e.Message);
-                throw e;
+                //throw;
             }
         }
 

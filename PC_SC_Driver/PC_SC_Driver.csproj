@@ -76,6 +76,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Constants.cs" />
+    <Compile Include="INIHelper.cs" />
     <Compile Include="Marshal.cs" />
     <Compile Include="Mifare\MiFare.Shared.Win32\CardReader.cs" />
     <Compile Include="Mifare\MiFare.Shared.Win32\Classic\FactoryMethods.cs" />
@@ -152,9 +153,9 @@
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>echo Begin Dot Export
-cd $(TargetDir)\Out
-DotNetExport.exe $(TargetPath)  C:\MifareServio\CustomMifareReader.dll 4
+    <PostBuildEvent>echo Begin Dot Export to C:\ServioCardAPI\SDK\CustomMifare.dll
+cd $(TargetDir)\Out\DotNetExport
+DotNetExport.exe $(TargetPath) C:\ServioCardAPI\SDK\CustomMifare.dll 4
 echo End!</PostBuildEvent>
   </PropertyGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
