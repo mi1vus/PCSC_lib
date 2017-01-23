@@ -75,7 +75,6 @@ namespace MiFare.Classic
                 && (this as MiFareWin32CardReader).SmartCard.ReaderName.Contains("1252"))
             {
                 storage = LoadKeys.LoadKeysStorageType.Volatile;
-                System.Windows.Forms.MessageBox.Show("1251");
             }
                            
             var keyTypeToUse = key;
