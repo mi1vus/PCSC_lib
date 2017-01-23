@@ -92,8 +92,11 @@ namespace CustomMifareReader
         [Obfuscation]
         public static string SetReader(string str)
         {
+            if (string.IsNullOrWhiteSpace(str))
+                return null;
+
             reader = str;
-            string result = $"reader is: {reader}";
+            string result = $"reader set is: {reader}";
             bool error = false;
             if (_card == null)
             {
@@ -111,10 +114,9 @@ namespace CustomMifareReader
                 error = true;
             }
 
-            if (error)
-                return result;
-            else
-                return null;
+            WriteToLog(result);
+
+            return null;
         }
 
         private static string reader;
