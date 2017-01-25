@@ -24,6 +24,8 @@ namespace CustomMifareReader
         private static HashSet<Tuple<int, int>> _cardBadSectors;
 
         private static IntPtr _obj = IntPtr.Zero;
+        public static string LoginPath;
+        private static string ReaderName;
 
         //--------------------------sector,KeyType ---> slot, nonvolatile, key (6 bite)
         private static Dictionary<Tuple<int, int>, Tuple<int, bool, byte[]>> _keys;
@@ -90,46 +92,49 @@ namespace CustomMifareReader
         }
 
         [Obfuscation]
-        public static string SetReader(string str)
+        public static string InitReader(string reader, string log)
         {
-            if (string.IsNullOrWhiteSpace(str))
+            if (string.IsNullOrWhiteSpace(reader) || string.IsNullOrWhiteSpace(log))
                 return null;
 
-            reader = str;
-            string result = $"reader set is: {reader}";
-            bool error = false;
-            if (_card == null)
-            {
-                result += "\r\n card null";
-                error = true;
-            }
-            if (_reader == null)
-            {
-                result += "\r\n reader null";
-                error = true;
-            }
-            if (_cardIdentification == null)
-            {
-                result += "\r\n cardIdentification null";
-                error = true;
-            }
+            if (!string.IsNullOrWhiteSpace(PcScDrv.ReaderName) && !string.IsNullOrWhiteSpace(LoginPath))
+                return null;
+
+            LoginPath = log;
+
+            PcScDrv.ReaderName = reader;
+            string result = $"reader set is: {PcScDrv.ReaderName} \r\n\t\tlog:{LoginPath}";
+            //var error = false;
+            //if (_card == null)
+            //{
+            //    result += "\r\n card null";
+            //    error = true;
+            //}
+            //if (_reader == null)
+            //{
+            //    result += "\r\n reader null";
+            //    error = true;
+            //}
+            //if (_cardIdentification == null)
+            //{
+            //    result += "\r\n cardIdentification null";
+            //    error = true;
+            //}
 
             WriteToLog(result);
 
             return null;
         }
 
-        private static string reader;
-
         // Инициализация считывателя (const InitStr : PWideChar; const Caps : PMifareClassicReaderCaps; const Obj : PPointer) : Integer; stdcall;
         //   InitParams - параметры инициализации. Param1=Value1;Param2=Value2...
         //   Caps - возможности считывателя
         //   Obj - ссылка на объект считывателя
         [Obfuscation]
-        public static int Init(/*[MarshalAs(UnmanagedType.LPWStr)]* string*/ IntPtr initStr, IntPtr caps, ref IntPtr obj)
+        public static int Init([MarshalAs(UnmanagedType.LPWStr)] string /*IntPtr*/ initStr, IntPtr caps, ref IntPtr obj)
         {
             string text =
-                $"!!! Init !!!\tobj:{obj}\tCaps:{caps}\tInitStr:{Marshal.PtrToStringBSTR(initStr) ?? "null"}\t";
+                $"!!! Init !!!\tobj:{obj}\tCaps:{caps}\tInitStr:{initStr/*Marshal.PtrToStringBSTR(initStr)*/ ?? "null"}\t";
             //WriteToLog(text);
             try
             {
@@ -828,17 +833,18 @@ namespace CustomMifareReader
 
             if (!writeToLog)
                 return;
-            string path = @"Out\DLL_Log.txt";
-            if (/*write_count == 0 ||*/ !File.Exists(path))
+
+            var LogPath = Path.Combine(LoginPath, @"DLL_Log.txt");
+            if (/*write_count == 0 ||*/ !File.Exists(LogPath))
             {
-                using (StreamWriter sw = File.CreateText(path))
+                using (StreamWriter sw = File.CreateText(LogPath))
                 {
                     sw.Write($"[{_writeCount}\t{DateTime.Now}]: {text}\r\n");
                 }
             }
             else
             {
-                using (StreamWriter sw = File.AppendText(path))
+                using (StreamWriter sw = File.AppendText(LogPath))
                 {
                     sw.Write($"[{_writeCount}\t{DateTime.Now}]: {text}\r\n");
                 }
@@ -858,17 +864,17 @@ namespace CustomMifareReader
 //
 //            if (!writeToLog)
 //                return;
-//            string path = @"Out\DLL_Data_Log.txt";
-//            if (/*write_data_count == 0 ||*/ !File.Exists(path))
+//             = @"Out\DLL_Data_Log.txt";
+//            if (/*write_data_count == 0 ||*/ !File.Exists(LogPath))
 //            {
-//                using (StreamWriter sw = File.CreateText(path))
+//                using (StreamWriter sw = File.CreateText(LogPath))
 //                {
 //                    sw.Write($"{(write ? "write" : " read")}: {sector} [{block}]\t{DateTime.Now}: {data}\r\n");
 //                }
 //            }
 //            else
 //            {
-//                using (StreamWriter sw = File.AppendText(path))
+//                using (StreamWriter sw = File.AppendText(LogPath))
 //                {
 //                    sw.Write($"{(write ? "write" : " read")}: {sector} [{block}]\t{DateTime.Now}: {data}\r\n");
 //                }
@@ -886,17 +892,17 @@ namespace CustomMifareReader
                 WriteToLog("WriteOrReplaceToFileSector Попытка записи данных в неинициализированную карты");
                 throw new Exception("Попытка записи данных в неинициализированную карты");
             }
-            string path = @"Out\file_sector_" + uid.ByteArrayToString() + ".dat";
+            var LogPath = Path.Combine(LoginPath, $@"file_sector_{uid.ByteArrayToString()}.dat");
 
-            var fileList = File.ReadAllLines(path).ToList();
+            var fileList = File.ReadAllLines(LogPath).ToList();
             var ind = fileList.FindIndex(s => s.Contains($"{sector},{block}:"));
             if (ind >= 0)
             {
                 fileList[ind] = $"{sector},{block}:{data?.ByteArrayToString()}";
-                File.WriteAllLines(path, fileList);
+                File.WriteAllLines(LogPath, fileList);
             }
             else
-                using (StreamWriter sw = File.AppendText(path))
+                using (StreamWriter sw = File.AppendText(LogPath))
                 {
                     sw.Write($"{sector},{block}:{data?.ByteArrayToString()}{Environment.NewLine}");
                 }
@@ -909,11 +915,11 @@ namespace CustomMifareReader
                 WriteToLog("ReadFromFileSector Попытка чтения данных с неинициализированной карты");
                 throw new Exception();
             }
-            string path = @"Out\file_sector_" + uid.ByteArrayToString() + ".dat";
+            var LogPath = Path.Combine(LoginPath, $@"file_sector_{uid.ByteArrayToString()}.dat");
             var sectors = new Dictionary<Tuple<int, int>, byte[]>();
-            if (File.Exists(path))
+            if (File.Exists(LogPath))
             {
-                var fileLise = File.ReadAllLines(path).ToList();
+                var fileLise = File.ReadAllLines(LogPath).ToList();
                 fileLise.ForEach(s =>
                 {
                     var arr = s.Split(':', ',');
@@ -938,13 +944,13 @@ namespace CustomMifareReader
                 WriteToLog("ReadBadsFromFileSector Попытка чтения данных с неинициализированной карты");
                 throw new Exception("Попытка чтения данных с неинициализированной карты");
             }
-            string path = @"Out\file_sector_" + uid.ByteArrayToString() + ".dat";
+            var LogPath = Path.Combine(LoginPath, $@"file_sector_{uid.ByteArrayToString()}.dat");
 
             var result = new HashSet<Tuple<int, int>>();
 
-            if (File.Exists(path))
+            if (File.Exists(LogPath))
             {
-                using (var file = new StreamReader(path))
+                using (var file = new StreamReader(LogPath))
                 {
                     var header = file.ReadLine();
                     if (!string.IsNullOrWhiteSpace(header))
@@ -992,7 +998,7 @@ namespace CustomMifareReader
                     var config = new INIHelper(configPath);
                     WriteToLog($"ini file:{configPath}");
 
-                    currReader = (string.IsNullOrWhiteSpace(reader) ? config["LogicalDevice"] : reader);
+                    currReader = (string.IsNullOrWhiteSpace(ReaderName) ? config["LogicalDevice"] : ReaderName);
                     //currReader = config["LogicalDevice"];
                 }
                 WriteToLog($"select reader:{currReader}");
