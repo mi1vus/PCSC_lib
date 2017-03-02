@@ -25,7 +25,7 @@ namespace CustomMifareReader
 
         private static IntPtr _obj = IntPtr.Zero;
         public static string LoginPath;
-        private static string ReaderName;
+        private static string _readerName;
 
         //--------------------------sector,KeyType ---> slot, nonvolatile, key (6 bite)
         private static Dictionary<Tuple<int, int>, Tuple<int, bool, byte[]>> _keys;
@@ -97,13 +97,12 @@ namespace CustomMifareReader
             if (string.IsNullOrWhiteSpace(reader) || string.IsNullOrWhiteSpace(log))
                 return null;
 
-            if (!string.IsNullOrWhiteSpace(PcScDrv.ReaderName) && !string.IsNullOrWhiteSpace(LoginPath))
+            if (!string.IsNullOrWhiteSpace(_readerName) && !string.IsNullOrWhiteSpace(LoginPath))
                 return null;
 
             LoginPath = log;
-
-            PcScDrv.ReaderName = reader;
-            string result = $"reader set is: {PcScDrv.ReaderName} \r\n\t\tlog:{LoginPath}";
+            _readerName = reader;
+            string result = $"\r\n\t\treader set is: {_readerName} \r\n\t\tlog:{LoginPath}";
             //var error = false;
             //if (_card == null)
             //{
@@ -135,7 +134,7 @@ namespace CustomMifareReader
         {
             string text =
                 $"!!! Init !!!\tobj:{obj}\tCaps:{caps}\tInitStr:{initStr/*Marshal.PtrToStringBSTR(initStr)*/ ?? "null"}\t";
-            //WriteToLog(text);
+            WriteToLog(text);
             try
             {
                 UnMemory<int>.SaveInMemArr(new[] {12, 1, 0}, ref caps);
@@ -204,7 +203,7 @@ namespace CustomMifareReader
         {
             string text =
                 $"!!! LoadKey !!!\tobj:{obj}\tSector:{sector}\tKeyType:{keyTypeInt}\tNonvolatileMemory:{nonvolatileMemory}\tKeyIndex:{keyIndex}\tKey:{key}\t";
-            //WriteToLog(text);
+            WriteToLog(text);
             try
             {
                 if (_keys != null && _card != null)
@@ -349,7 +348,7 @@ namespace CustomMifareReader
         {
             string text =
                 $"!!! Authentication !!!\tobj:{obj}\tSector:{sector}\tKeyType:{keyTypeInt}\tNonvolatileMemory:{nonvolatileMemory}\tKeyIndex:{keyIndex}\t";
-            //WriteToLog(text);
+            WriteToLog(text);
             try
             {
                 if (_reader == null || _card == null)
@@ -393,7 +392,7 @@ namespace CustomMifareReader
         {
             string text =
                 $"!!! ReadBlock !!!\tobj:{obj}\tBlock:{block}\tBuffer:{buffer}\t";
-            //WriteToLog(text);
+            WriteToLog(text);
             try
             {
                 if (_card != null)
@@ -479,7 +478,7 @@ namespace CustomMifareReader
             string text =
                 $"!!! WriteBlock !!!\tobj:{obj}\tBlock:{block}\tData:{data}\t";
 
-            //WriteToLog(text);
+            WriteToLog(text);
             try
             {
                 if (_card != null)
@@ -834,7 +833,7 @@ namespace CustomMifareReader
             if (!writeToLog)
                 return;
 
-            var LogPath = Path.Combine(LoginPath, @"DLL_Log.txt");
+            var LogPath = Path.Combine(LoginPath, @"DLL_Log_PC_SC.txt");
             if (/*write_count == 0 ||*/ !File.Exists(LogPath))
             {
                 using (StreamWriter sw = File.CreateText(LogPath))
@@ -998,7 +997,7 @@ namespace CustomMifareReader
                     var config = new INIHelper(configPath);
                     WriteToLog($"ini file:{configPath}");
 
-                    currReader = (string.IsNullOrWhiteSpace(ReaderName) ? config["LogicalDevice"] : ReaderName);
+                    currReader = (string.IsNullOrWhiteSpace(_readerName) ? config["LogicalDevice"] : _readerName);
                     //currReader = config["LogicalDevice"];
                 }
                 WriteToLog($"select reader:{currReader}");

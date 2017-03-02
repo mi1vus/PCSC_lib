@@ -75,9 +75,6 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Constants.cs" />
-    <Compile Include="INIHelper.cs" />
-    <Compile Include="Marshal.cs" />
     <Compile Include="Mifare\MiFare.Shared.Win32\CardReader.cs" />
     <Compile Include="Mifare\MiFare.Shared.Win32\Classic\FactoryMethods.cs" />
     <Compile Include="Mifare\MiFare.Shared.Win32\Classic\MiFareWin32CardReader.cs" />
@@ -141,6 +138,12 @@
       <DependentUpon>Settings.settings</DependentUpon>
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
     </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Utilities\Utilities.csproj">
+      <Project>{8d0c4b81-4f09-47c2-8400-a4a8fc52542d}</Project>
+      <Name>Utilities</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
