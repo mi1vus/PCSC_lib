@@ -27,6 +27,7 @@ namespace VIVO_Driver
 
         private static IntPtr _obj = IntPtr.Zero;
         private static readonly object LockObj = new object();
+        private static readonly object WriteLockObj = new object();
         public static string LogirPath = @"C:\ServioCardAPI\SDK\Out";
         public static CardType CardType;
         public static byte[] CardId;
@@ -43,7 +44,7 @@ namespace VIVO_Driver
         public static byte LastCommandCode;
         public static byte LastSubCommandCode;
         public static Status LastCommandStatus = Status.Empty;
-        public static bool LastResponseCRCIsOK; 
+        public static bool LastResponseCRCIsOK;
         private static bool _waitNextResponse;
 
         #endregion
@@ -143,7 +144,7 @@ namespace VIVO_Driver
         //   Caps - возможности считывателя
         //   Obj - ссылка на объект считывателя
         [Obfuscation]
-        public static int Init([MarshalAs(UnmanagedType.LPWStr)] string /*IntPtr*/ initStr, IntPtr caps, ref IntPtr obj)
+        public static int Init([MarshalAs(UnmanagedType.LPWStr)] string /*IntPtr*/ initStr, ref IntPtr caps, ref IntPtr obj)
         {
             string text =
                 $"!!! Init !!!\tobj:{obj}\tCaps:{caps}\tInitStr:{initStr/*Marshal.PtrToStringBSTR(initStr)*/ ?? "null"}\t pid {USBDevProduct}\t vid {USBDevVendor}";
@@ -359,13 +360,18 @@ namespace VIVO_Driver
             try
             {
                 var uid = CardId;
+                WriteToLog($"UID {BitConverter.ToString(uid)}");
+
                 if (uid != null && uid.Length > 0)
                 {
                     byte[] truncUid = new byte[Math.Min(bufSize, uid.Length)];
+                    WriteToLog($"saved in mem truncUid {truncUid.Length}");
                     Array.Copy(uid, truncUid, truncUid.Length);
                     UnMemory<int>.SaveInMem(truncUid.Length, ref serialNumberSize);
-                    UnMemory<byte>.SaveInMemArr(uid, ref serialNumberBuf);
+                    WriteToLog($"saved in mem lrngth {truncUid.Length}");
+                    UnMemory<byte>.SaveInMemArr(truncUid, ref serialNumberBuf);
                     //Marshal.StructureToPtr(memory_object, SerialNumberBuf, true);
+                    WriteToLog($"saved in mem uid {BitConverter.ToString(truncUid)}");
 
                     var uidWrited = UnMemory<byte>.ReadInMemArr(serialNumberBuf, truncUid.Length);
                     var serialNumberSizeWrited = UnMemory<int>.ReadInMem(serialNumberSize);
@@ -431,12 +437,15 @@ namespace VIVO_Driver
                     WriteToLog($"!!! Authentication ERROR _reader");
                     return (int)ErrorCodes.E_CARDREADER_NOT_INIT;
                 }
+
+                return (int)ErrorCodes.E_SUCCESS;
+
                 var keyA = GetKeyFromCollection(sector, 0);
                 var keyB = GetKeyFromCollection(sector, 1);
 
                 byte block = SectorToBlock(sector);
                 Status tmpRes = Status.OK;
-                if (/*KeyType_int == 0 &&*/ keyA != null)
+                if (keyTypeInt == 0 && keyA != null)
                 {
                     KeyType keyT = KeyType.KeyA;
 
@@ -447,7 +456,7 @@ namespace VIVO_Driver
 
                     tmpRes = SendCmd(Commands.Auth, data);
                 }
-                if (/*KeyType_int == 1 &&*/ keyB != null && tmpRes == Status.OK)
+                if (keyTypeInt == 1 && keyB != null && tmpRes == Status.OK)
                 {
                     KeyType keyT = KeyType.KeyB;
 
@@ -538,7 +547,9 @@ namespace VIVO_Driver
                     data[1] = (byte)keyT;
                     Array.Copy(keyA, 0, data, 2, keyA.Length);
 
-                    tmpRes = SendCmd(Commands.Poll, new byte[] {0x0, 0xC8}); //2sec timeout
+                    tmpRes = SendCmd(Commands.Ping, new byte[] {});
+                    if (tmpRes == Status.OK)
+                        tmpRes = SendCmd(Commands.Poll, new byte[] {0x0, 0xC8}); //2sec timeout
                     if (tmpRes == Status.OK)
                         tmpRes = SendCmd(Commands.Auth, data);
                     if (tmpRes == Status.OK)
@@ -553,23 +564,25 @@ namespace VIVO_Driver
                     data[1] = (byte)keyT;
                     Array.Copy(keyB, 0, data, 2, keyB.Length);
 
-                    tmpRes = SendCmd(Commands.Poll, new byte[] { 0x0, 0xC8 }); //2sec timeout
+                    tmpRes = SendCmd(Commands.Ping, new byte[] { });
+                    if (tmpRes == Status.OK)
+                        tmpRes = SendCmd(Commands.Poll, new byte[] { 0x0, 0xC8 }); //2sec timeout
                     if (tmpRes == Status.OK)
                         tmpRes = SendCmd(Commands.Auth, data);
                     if (tmpRes == Status.OK)
-                        tmpRes = SendCmd(Commands.Read, new byte[] { card_blocks, (byte)block });
+                        tmpRes = SendCmd(Commands.Read, new [] { card_blocks, (byte)block });
                 }
-                /*
-                                var sec = _card.GetSector(Sector);
+/*
+                var sec = _card.GetSector(Sector);
 
-                                //TODO только для тестов!
-                                if (_cardBadSectors?.Contains(new Tuple<int, int>(Sector, sec.NumDataBlocks -  1))??false)
-                                    return (int) ErrorCodes.E_SUCCESS;
+                //TODO только для тестов!
+                if (_cardBadSectors?.Contains(new Tuple<int, int>(Sector, sec.NumDataBlocks -  1))??false)
+                    return (int) ErrorCodes.E_SUCCESS;
 
-                                var secAuthentification = sec.GetData(0).Result;
-                                if (secAuthentification == null)
-                                    return (int)ErrorCodes.E_CARDREADER_NOT_INIT;
-                */
+                var secAuthentification = sec.GetData(0).Result;
+                if (secAuthentification == null)
+                    return (int)ErrorCodes.E_CARDREADER_NOT_INIT;
+*/
 
                 if (tmpRes == Status.OK && LastResponseData.Length > 0 && LastResponseData.Length < 17)
                 {
@@ -1176,7 +1189,8 @@ namespace VIVO_Driver
 
         private static void usb_OnDataReceived(object sender, DataRecievedEventArgs args)
         {
-            lock (LockObj)
+            WriteToLog($"Data received!!!\r\n {args}", false);
+//            lock (LockObj)
             {
                 string recData = "Raw data received: ";
                 foreach (byte myData in args.data)
@@ -1246,9 +1260,9 @@ namespace VIVO_Driver
         #endregion
 
         #region Внутренние методы
-        public static void Init(int timeout = 10000)
+        private static void Init(int timeout = 10000)
         {
-            lock (LockObj)
+//            lock (LockObj)
             {
                 WriteToLog("Init(int timeout = 10000)", false);
                 if (timeout < 0) throw new ArgumentOutOfRangeException(nameof(timeout));
@@ -1302,8 +1316,9 @@ namespace VIVO_Driver
 
         //    //return task.Result == Status.OK;
         //}
-        public static Status SendCmd(Commands cmd, byte[] data, int timeout = 2000)
+        private static Status SendCmd(Commands cmd, byte[] data, int timeout = 1000)
         {
+            WriteToLog($"Command send!!!\r\n {cmd} -- {data}", false);
             if (USB.SpecifiedDevice != null)
             {
                 lock (LockObj)
@@ -1360,9 +1375,10 @@ namespace VIVO_Driver
             return Status.Command_Not_Sended;
         }
 
-        public static bool ParseResponse(byte[] data, ref byte command, ref Status status, ref bool crcok, ref byte[] commData)
+        private static bool ParseResponse(byte[] data, ref byte command, ref Status status, ref bool crcok, ref byte[] commData)
         {
             //var mode = data[0];
+            WriteToLog($"Parse response!!!\r\n {data} -- {command}", false);
             var d1 = BitConverter.ToString(data, 1).Replace("-", "");
             var d2 = BitConverter.ToString(InitArray).Replace("-", "");
             if (d1.StartsWith(d2))
@@ -1446,34 +1462,37 @@ namespace VIVO_Driver
         private static int _writeCount;
         private static void WriteToLog(string text, bool isError = false)
         {
-            bool writeToLog = isError;
+            lock(WriteLockObj)
+            {
+                bool writeToLog = isError;
 #if DEBUG
-            writeToLog = true;
+                writeToLog = true;
 #endif
-            //TODO на время тестирования
-            writeToLog = true;
+                //TODO на время тестирования
+                writeToLog = true;
 
-            if (!writeToLog || string.IsNullOrWhiteSpace(LogirPath))
-                return;
+                if (!writeToLog || string.IsNullOrWhiteSpace(LogirPath))
+                    return;
 
-            var logPath = Path.Combine(LogirPath, @"DLL_Log_VIVO_Pay.txt");
-            if (/*write_count == 0 ||*/ !File.Exists(logPath))
-            {
-                using (StreamWriter sw = File.CreateText(logPath))
+                var logPath = Path.Combine(LogirPath, @"DLL_Log_VIVO_Pay.txt");
+                if (/*write_count == 0 ||*/ !File.Exists(logPath))
                 {
-                    sw.Write($"[{_writeCount}\t{DateTime.Now}]: {text}\r\n");
+                    using (StreamWriter sw = File.CreateText(logPath))
+                    {
+                        sw.Write($"[{_writeCount}\t{DateTime.Now}]: {text}\r\n");
+                    }
                 }
-            }
-            else
-            {
-                using (StreamWriter sw = File.AppendText(logPath))
+                else
                 {
-                    sw.Write($"[{_writeCount}\t{DateTime.Now}]: {text}\r\n");
+                    using (StreamWriter sw = File.AppendText(logPath))
+                    {
+                        sw.Write($"[{_writeCount}\t{DateTime.Now}]: {text}\r\n");
+                    }
                 }
+                ++_writeCount;
+                if (_writeCount == int.MaxValue)
+                    _writeCount = 0;
             }
-            ++_writeCount;
-            if (_writeCount == int.MaxValue)
-                _writeCount = 0;
         }
 
         #endregion

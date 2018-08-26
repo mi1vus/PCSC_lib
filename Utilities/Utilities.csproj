@@ -46,7 +46,16 @@
     <Compile Include="Marshal.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="MyForm.cpp" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <PropertyGroup>
+    <PostBuildEvent>echo Begin copy to C:\ServioCardAPI\SDK\VIVO_Driver.dll
+copy /y "$(TargetPath)" "C:\ServioCardAPI\SDK"
+copy /y "$(TargetPath)" "D:\Projects\C#\SmartPumpControl\SmartPumpControl\TestApp\bin\Debug"
+echo End!</PostBuildEvent>
+  </PropertyGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
   <Target Name="BeforeBuild">
